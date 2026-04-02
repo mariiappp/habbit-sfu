@@ -13,13 +13,14 @@ import {
 import LogoHabbit from "../../../assets/images/LogoHabbit.svg";
 
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen({ onLogin }) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
 
     const handleLogin = () => {
-        navigation.navigate('Home');
+        onLogin();
     };
+
 
     return (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>

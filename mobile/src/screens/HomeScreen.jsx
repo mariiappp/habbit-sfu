@@ -14,7 +14,6 @@ import Svg, {
     LinearGradient,
     Stop,
 } from 'react-native-svg';
-import ScreenLayout from '../components/ScreenLayout';
 
 export default function HomeScreen({ navigation }) {
     const [userName] = useState('Иван');
@@ -93,7 +92,7 @@ export default function HomeScreen({ navigation }) {
     };
 
     return (
-        <ScreenLayout navigation={navigation} activeScreen="Home">
+        <SafeAreaView style={styles.safeArea}>
             <ScrollView
                 style={styles.container}
                 contentContainerStyle={styles.contentContainer}
@@ -187,7 +186,7 @@ export default function HomeScreen({ navigation }) {
 
                 <ProductivityChart data={productivityData} />
             </ScrollView>
-        </ScreenLayout>
+        </SafeAreaView>
     );
 }
 
@@ -341,6 +340,7 @@ const styles = StyleSheet.create({
         paddingBottom: 32,
     },
     greeting: {
+        fontFamily: 'WixMadeforDisplayBold',
         fontSize: 20,
         fontWeight: '700',
         color: '#111111',
@@ -363,11 +363,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     circlePercent: {
-        fontSize: 34,
+        fontFamily: 'WixMadeforDisplayBold',
+        fontSize: 45,
         fontWeight: '800',
         color: '#111111',
     },
     circleLabel: {
+        fontFamily: 'WixMadeforDisplayBold',
         marginTop: 4,
         fontSize: 14,
         color: '#444444',
@@ -398,6 +400,7 @@ const styles = StyleSheet.create({
         fontSize: 13,
     },
     metricLabel: {
+        fontFamily: 'WixMadeforDisplayMedium',
         flex: 1,
         fontSize: 16,
         color: '#1F1F1F',
@@ -456,6 +459,7 @@ const styles = StyleSheet.create({
         marginBottom: 22,
     },
     adviceTitle: {
+        fontFamily: 'WixMadeforDisplayBold',
         fontSize: 17,
         fontWeight: '700',
         color: '#111111',
@@ -471,6 +475,7 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
     adviceText: {
+        fontFamily: 'WixMadeforDisplayMedium',
         flex: 1,
         fontSize: 14,
         lineHeight: 20,
@@ -498,6 +503,7 @@ const styles = StyleSheet.create({
     },
 
     sectionTitle: {
+        fontFamily: 'WixMadeforDisplayBold',
         fontSize: 18,
         fontWeight: '700',
         color: '#111111',
@@ -508,37 +514,48 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
-        marginBottom: 22,
+        marginBottom: 80,
     },
     summaryCard: {
         width: '48%',
         aspectRatio: 1,
         backgroundColor: '#F2F7FB',
         borderRadius: 22,
-        padding: 14,
+        paddingTop: 18,
+        paddingHorizontal: 16,
+        paddingBottom: 14,
         marginBottom: 14,
         justifyContent: 'space-between',
     },
+
     summaryTitle: {
-        fontSize: 15,
+        fontSize: 14,
+        lineHeight: 18,
         color: '#262626',
-        lineHeight: 20,
+        fontFamily: 'WixMadeforDisplayMedium',
     },
+
     summaryValueRow: {
         flexDirection: 'row',
         alignItems: 'flex-end',
+        marginTop: 10,
     },
+
     summaryValue: {
-        fontSize: 56,
-        lineHeight: 58,
-        fontWeight: '800',
+        fontSize: 100,
+        lineHeight: 100,
+        fontFamily: 'AlumniSans',
+        includeFontPadding: false,
+        transform: [{ translateY: 22 }],
     },
+
     summarySuffix: {
-        fontSize: 18,
+        fontSize: 16,
+        lineHeight: 16,
         color: '#222222',
-        marginLeft: 4,
-        marginBottom: 8,
-        fontWeight: '600',
+        marginLeft: 10,
+        marginBottom: 6,
+        fontFamily: 'WixMadeforDisplaySemiBold',
     },
 
     chartCard: {
@@ -550,6 +567,7 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     chartTitle: {
+        fontFamily: 'WixMadeforDisplayBold',
         fontSize: 17,
         fontWeight: '700',
         color: '#111111',
@@ -576,6 +594,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#F83603',
     },
     chartDay: {
+        fontFamily: 'WixMadeforDisplayMedium',
         marginTop: 10,
         fontSize: 13,
         color: '#333333',
