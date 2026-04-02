@@ -12,12 +12,13 @@ import {
 } from 'react-native';
 import LogoHabbit from "../../../assets/images/LogoHabbit.svg";
 
-export default function LoginScreen() {
+
+export default function LoginScreen({ navigation }) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
 
     const handleLogin = () => {
-        console.log('Вход:', { username, password });
+        navigation.navigate('Home');
     };
 
     return (
