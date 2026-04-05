@@ -6,16 +6,10 @@ from fastapi import APIRouter, status
 
 from pydantic import BaseModel, Field
 
+from app.domain.schemas.health import HealthResponse
 from app.core.config import settings
 
 router = APIRouter()
-
-
-class HealthResponse(BaseModel):
-    """Response schema for health check endpoints."""
-    status: str = Field(default="ok", description="Current operational status")
-    version: str = Field(..., description="Application semantic version")
-    environment: str = Field(..., description="Deployment environment (production/development)")
 
 
 @router.get(
