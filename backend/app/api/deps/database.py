@@ -1,7 +1,4 @@
-"""FastAPI dependency injection providers.
-
-Centralized module for all API dependencies.
-"""
+"""Database dependencies."""
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
@@ -12,10 +9,7 @@ from app.db.session import get_session_context
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency for injecting database sessions.
-
-    Automatically handles commit, rollback, and session closure.
-    """
+    """Inject database session."""
     async with get_session_context() as session:
         yield session
 
