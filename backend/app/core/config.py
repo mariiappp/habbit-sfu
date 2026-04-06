@@ -36,6 +36,12 @@ class Settings(BaseSettings):
         description="Asynchronous PostgreSQL connection string"
     )
 
+    # Database pool settings
+    db_pool_size: int = Field(default=10, ge=1, le=100, description="Max connections in pool")
+    db_max_overflow: int = Field(default=20, ge=0, description="Extra connections under load")
+    db_pool_timeout: int = Field(default=30, ge=1, description="Seconds to wait for connection")
+    db_pool_recycle: int = Field(default=3600, ge=60, description="Recycle connections after N seconds")
+
     # Security
     secret_key: str = Field(
         default="SECRET_SECRET_SECRET_SECRET_SECRET_SECRET",
