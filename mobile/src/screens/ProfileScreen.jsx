@@ -87,14 +87,14 @@ const styles = StyleSheet.create({
 
   topTitle: {
     fontFamily: 'WixMadeforDisplayBold',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#111111',
-    marginBottom: 42,
+    marginBottom: 50,
   },
 
   headerBlock: {
-    marginBottom: 34,
+    marginBottom: 50,
   },
   userName: {
     fontFamily: 'WixMadeforDisplayBold',
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
   tag: {
     paddingHorizontal: 10,
@@ -121,17 +121,18 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 12,
     color: '#111111',
+    fontFamily: 'WixMadeforDisplayMedium',
   },
 
   settingsBlock: {
-    gap: 18,
+    gap: 16,
   },
 
   settingCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 28,
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -144,7 +145,7 @@ const styles = StyleSheet.create({
   },
   settingTitle: {
     fontFamily: 'WixMadeforDisplayBold',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: '#111111',
   },

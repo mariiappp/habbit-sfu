@@ -9,6 +9,8 @@ import {
     TextInput,
     SafeAreaView
 } from 'react-native';
+import Repeat from '../../assets/images/focusIcons/Repeat.svg';
+import Settings from '../../assets/images/focusIcons/Settings.svg';
 
 export default function FocusScreen({ navigation }) {
     const [durationMinutes, setDurationMinutes] = useState(25);
@@ -110,7 +112,7 @@ export default function FocusScreen({ navigation }) {
                                 activeOpacity={0.85}
                                 onPress={handleReset}
                             >
-                                <Text style={styles.sideButtonIcon}>↻</Text>
+                                <Repeat style={styles.sideButtonIcon}></Repeat>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -126,7 +128,7 @@ export default function FocusScreen({ navigation }) {
                                 activeOpacity={0.85}
                                 onPress={openSettings}
                             >
-                                <Text style={styles.sideButtonIcon}>⚙</Text>
+                                <Settings style={styles.sideButtonIcon}></Settings>
                             </TouchableOpacity>
                         </>
                     ) : (
@@ -246,24 +248,24 @@ const styles = StyleSheet.create({
 
     title: {
         fontFamily: 'WixMadeforDisplayBold',
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
         color: '#111111',
-        marginBottom: 24,
     },
 
     timerBlock: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        marginTop: 60,
     },
 
     timeText: {
-        fontSize: 200,
-        lineHeight: 180, 
+        fontSize: 210,
+        lineHeight: 190,
         fontFamily: 'AlumniSans',
         includeFontPadding: false,
-        marginVertical: -10, 
+        marginVertical: -10,
     },
     controlsRow: {
         minHeight: 90,
@@ -275,8 +277,8 @@ const styles = StyleSheet.create({
     },
 
     sideButton: {
-        width: 44,
-        height: 44,
+        width: 45,
+        height: 45,
         borderRadius: 22,
         backgroundColor: '#F2F7FB',
         justifyContent: 'center',
@@ -290,12 +292,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.12,
         shadowRadius: 8,
         elevation: 6,
-    },
-
-    sideButtonIcon: {
-        fontSize: 22,
-        color: '#222222',
-        fontWeight: '600',
     },
 
     playButton: {
@@ -362,6 +358,7 @@ const styles = StyleSheet.create({
     },
 
     sectionTitle: {
+        fontFamily: 'WixMadeforDisplayBold',
         fontSize: 16,
         fontWeight: '600',
         color: '#222222',
@@ -369,6 +366,7 @@ const styles = StyleSheet.create({
     },
 
     input: {
+        fontFamily: 'WixMadeforDisplayMedium',
         height: 52,
         borderRadius: 16,
         backgroundColor: '#F2F7FB',
@@ -410,6 +408,7 @@ const styles = StyleSheet.create({
     },
 
     soundOptionText: {
+        fontFamily: 'WixMadeforDisplayMedium',
         fontSize: 15,
         color: '#222222',
     },

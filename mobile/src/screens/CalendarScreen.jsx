@@ -391,15 +391,15 @@ const styles = StyleSheet.create({
 
   topTitle: {
     fontFamily: 'WixMadeforDisplayBold',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#111111',
-    marginBottom: 24,
+    marginBottom: 30,
   },
 
   calendar: {
     borderRadius: 24,
-    marginBottom: 28,
+    marginBottom: 50,
   },
 
   sectionTitle: {
@@ -407,19 +407,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#111111',
-    marginBottom: 14,
+    marginBottom: 16,
   },
 
   cardsBlock: {
-    marginBottom: 28,
-    gap: 14,
+    marginBottom: 50,
+    gap: 16,
   },
 
   taskCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     flexDirection: 'row',
     alignItems: 'center',
 
@@ -441,6 +441,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   taskMonth: {
+    fontFamily: 'WixMadeforDisplayMedium',
     fontSize: 12,
     marginTop: 4,
     fontWeight: '500',
@@ -450,15 +451,15 @@ const styles = StyleSheet.create({
   },
   taskTitle: {
     fontFamily: 'WixMadeforDisplayBold',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: '#111111',
-    marginBottom: 6,
+    marginBottom: 10,
   },
   taskType: {
     fontSize: 14,
     color: '#222222',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   subjectTag: {
     alignSelf: 'flex-start',
@@ -470,7 +471,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FF',
   },
   subjectTagText: {
-    fontSize: 11,
+    fontFamily: 'WixMadeforDisplayMedium',
+    fontSize: 12,
     color: '#6A73E5',
   },
   arrowCircle: {
@@ -491,9 +493,9 @@ const styles = StyleSheet.create({
 
   addTaskCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 24,
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -519,10 +521,11 @@ const styles = StyleSheet.create({
 
   emptyCard: {
     backgroundColor: '#F2F7FB',
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 18,
   },
   emptyText: {
+    fontFamily: 'WixMadeforDisplayMedium',
     fontSize: 15,
     color: '#666666',
   },
@@ -540,12 +543,13 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontFamily: 'WixMadeforDisplayBold',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: '#111111',
     marginBottom: 18,
   },
   input: {
+    fontFamily: 'WixMadeforDisplayMedium',
     height: 52,
     borderRadius: 16,
     backgroundColor: '#F2F7FB',

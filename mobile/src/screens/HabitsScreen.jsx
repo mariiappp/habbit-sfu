@@ -104,7 +104,7 @@ export default function HabitsScreen() {
 
         <View style={styles.streakBlock}>
           <View style={styles.fireWrapper}>
-            <FireIcon width={120} height={120} />
+            <FireIcon width={180} height={180} />
           </View>
 
           <Text style={styles.streakNumber}>{streakDays} дней</Text>
@@ -241,32 +241,31 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 18,
     paddingTop: 18,
-    paddingBottom: 24,
+    paddingBottom: 50,
   },
 
   title: {
     fontFamily: 'WixMadeforDisplayBold',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#111111',
-    marginBottom: 26,
+    marginBottom: 30,
   },
 
   streakBlock: {
     alignItems: 'center',
-    marginBottom: 22,
+    marginBottom: 50,
   },
-  fireWrapper: {
-    marginBottom: 8,
-  },
+
   streakNumber: {
     fontFamily: 'WixMadeforDisplayBold',
-    fontSize: 34,
+    fontSize: 40,
     fontWeight: '800',
     color: '#111111',
     lineHeight: 40,
   },
   streakSubtitle: {
+    fontFamily: 'WixMadeforDisplayMedium',
     marginTop: 4,
     fontSize: 15,
     color: '#222222',
@@ -275,7 +274,7 @@ const styles = StyleSheet.create({
   progressBarRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 26,
+    marginBottom: 16,
   },
   progressSection: {
     flex: 1,
@@ -288,14 +287,14 @@ const styles = StyleSheet.create({
   },
 
   listBlock: {
-    gap: 14,
+    gap: 16,
   },
 
   habitCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     minHeight: 72,
     flexDirection: 'row',
     alignItems: 'center',
@@ -319,7 +318,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#111111',
-    marginBottom: 6,
+    marginBottom: 10,
   },
   habitSubtitle: {
     fontSize: 14,
@@ -341,9 +340,9 @@ const styles = StyleSheet.create({
 
   addHabitCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 22,
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     minHeight: 72,
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,6 +390,7 @@ const styles = StyleSheet.create({
   },
 
   input: {
+    fontFamily: 'WixMadeforDisplayMedium',
     height: 52,
     borderRadius: 16,
     backgroundColor: '#F2F7FB',
@@ -423,6 +423,7 @@ const styles = StyleSheet.create({
     borderColor: '#F83603',
   },
   repeatOptionText: {
+    fontFamily: 'WixMadeforDisplayMedium',
     fontSize: 15,
     color: '#222222',
   },

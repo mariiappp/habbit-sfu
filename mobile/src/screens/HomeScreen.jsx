@@ -9,13 +9,18 @@ import {
 } from 'react-native';
 import Svg, {
     Circle,
-    Rect,
     Defs,
     LinearGradient,
     Stop,
 } from 'react-native-svg';
 
-export default function HomeScreen({ navigation }) {
+import AdviceStar from '../../assets/images/homeScreenIcons/AdviceStar.svg';
+import Habits from '../../assets/images/homeScreenIcons/Habits.svg';
+import Lock from '../../assets/images/homeScreenIcons/Lock.svg';
+import ScreenTime from '../../assets/images/homeScreenIcons/ScreenTime.svg';
+import Tasks from '../../assets/images/homeScreenIcons/Tasks.svg';
+
+export default function HomeScreen() {
     const [userName] = useState('Иван');
 
     const [tasksDone, setTasksDone] = useState(5);
@@ -106,25 +111,22 @@ export default function HomeScreen({ navigation }) {
 
                 <View style={styles.metricsBlock}>
                     <MetricRow
-                        icon="📝"
+                        Icon={Tasks}
                         label="Задачи"
                         value={`${tasksDone}/${tasksTotal}`}
                         iconBg="#DFF8C8"
-                        iconColor="#66C61C"
                     />
                     <MetricRow
-                        icon="🔥"
+                        Icon={Habits}
                         label="Привычки"
                         value={`${habitsDone}/${habitsTotal}`}
                         iconBg="#FFE5D9"
-                        iconColor="#FF7A45"
                     />
                     <MetricRow
-                        icon="📱"
+                        Icon={ScreenTime}
                         label="Экранное время"
                         value={`${screenTime}/${screenLimit} ч`}
                         iconBg="#E3E8FF"
-                        iconColor="#7388FF"
                         isLast
                     />
                 </View>
@@ -149,11 +151,9 @@ export default function HomeScreen({ navigation }) {
                     />
                 </View>
 
-                <AdviceCard
-                    title="Совет дня"
-                    text={dailyAdvice}
-                    progress={adviceProgress}
-                />
+                <Text style={styles.sectionTitle}>Совет дня</Text>
+
+                <AdviceCard text={dailyAdvice} progress={adviceProgress} />
 
                 <Text style={styles.sectionTitle}>Еженедельная сводка</Text>
 
@@ -184,6 +184,7 @@ export default function HomeScreen({ navigation }) {
                     />
                 </View>
 
+                <Text style={styles.sectionTitle}>Продуктивность</Text>
                 <ProductivityChart data={productivityData} />
             </ScrollView>
         </SafeAreaView>
@@ -240,11 +241,11 @@ function CircularBalance({ value }) {
     );
 }
 
-function MetricRow({ icon, label, value, iconBg, iconColor, isLast = false }) {
+function MetricRow({ Icon, label, value, iconBg, isLast = false }) {
     return (
         <View style={[styles.metricRow, isLast && styles.metricRowLast]}>
             <View style={[styles.metricIconWrapper, { backgroundColor: iconBg }]}>
-                <Text style={[styles.metricIcon, { color: iconColor }]}>{icon}</Text>
+                <Icon width={25} height={25} />
             </View>
             <Text style={styles.metricLabel}>{label}</Text>
             <Text style={styles.metricValue}>{value}</Text>
@@ -252,18 +253,17 @@ function MetricRow({ icon, label, value, iconBg, iconColor, isLast = false }) {
     );
 }
 
-function AdviceCard({ title, text, progress }) {
+
+function AdviceCard({ text, progress }) {
     return (
         <View style={styles.adviceCard}>
-            <Text style={styles.adviceTitle}>{title}</Text>
-
             <View style={styles.adviceTextRow}>
-                <Text style={styles.adviceEmoji}>📍</Text>
+                <AdviceStar width={35} height={35} style={styles.adviceIcon} />
                 <Text style={styles.adviceText}>{text}</Text>
             </View>
 
             <View style={styles.adviceProgressRow}>
-                <Text style={styles.lockIcon}>🔒</Text>
+                <Lock width={20} height={20} style={styles.lockSvg} />
                 <View style={styles.progressBarBg}>
                     <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
                 </View>
@@ -289,8 +289,6 @@ function ProductivityChart({ data }) {
 
     return (
         <View style={styles.chartCard}>
-            <Text style={styles.chartTitle}>Продуктивность</Text>
-
             <View style={styles.chartBars}>
                 {data.map((item) => {
                     const barHeight = Math.max(24, (item.value / maxValue) * 88);
@@ -341,16 +339,15 @@ const styles = StyleSheet.create({
     },
     greeting: {
         fontFamily: 'WixMadeforDisplayBold',
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
         color: '#111111',
-        marginBottom: 22,
-        marginTop: 8,
+        marginBottom: 50,
     },
 
     progressWrapper: {
         alignItems: 'center',
-        marginBottom: 22,
+        marginBottom: 50,
     },
     circleContainer: {
         width: 190,
@@ -389,15 +386,12 @@ const styles = StyleSheet.create({
         borderBottomWidth: 0,
     },
     metricIconWrapper: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
+        width: 35,
+        height: 35,
+        borderRadius: 30,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
-    },
-    metricIcon: {
-        fontSize: 13,
     },
     metricLabel: {
         fontFamily: 'WixMadeforDisplayMedium',
@@ -454,44 +448,37 @@ const styles = StyleSheet.create({
 
     adviceCard: {
         backgroundColor: '#F2F7FB',
-        borderRadius: 22,
-        padding: 16,
-        marginBottom: 22,
-    },
-    adviceTitle: {
-        fontFamily: 'WixMadeforDisplayBold',
-        fontSize: 17,
-        fontWeight: '700',
-        color: '#111111',
-        marginBottom: 14,
+        borderRadius: 20,
+        paddingVertical: 25,
+        paddingHorizontal: 20,
+        marginBottom: 50,
     },
     adviceTextRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        marginBottom: 14,
+        marginBottom: 16,
     },
-    adviceEmoji: {
-        marginRight: 8,
-        fontSize: 15,
+    adviceIcon: {
+        marginRight: 5,
+        marginTop: 2,
     },
     adviceText: {
         fontFamily: 'WixMadeforDisplayMedium',
         flex: 1,
         fontSize: 14,
         lineHeight: 20,
-        color: '#4A4A4A',
+        color: '#000',
     },
     adviceProgressRow: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-    lockIcon: {
-        fontSize: 14,
+    lockSvg: {
         marginRight: 10,
     },
     progressBarBg: {
         flex: 1,
-        height: 10,
+        height: 15,
         backgroundColor: '#D6DCE3',
         borderRadius: 999,
         overflow: 'hidden',
@@ -514,17 +501,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
-        marginBottom: 80,
+        marginBottom: 50,
     },
     summaryCard: {
         width: '48%',
         aspectRatio: 1,
         backgroundColor: '#F2F7FB',
-        borderRadius: 22,
+        borderRadius: 20,
         paddingTop: 18,
         paddingHorizontal: 16,
         paddingBottom: 14,
-        marginBottom: 14,
+        marginBottom: 16,
         justifyContent: 'space-between',
     },
 
@@ -538,7 +525,6 @@ const styles = StyleSheet.create({
     summaryValueRow: {
         flexDirection: 'row',
         alignItems: 'flex-end',
-        marginTop: 10,
     },
 
     summaryValue: {
@@ -560,18 +546,11 @@ const styles = StyleSheet.create({
 
     chartCard: {
         backgroundColor: '#F2F7FB',
-        borderRadius: 22,
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 18,
+        borderRadius: 20,
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 20,
         marginBottom: 24,
-    },
-    chartTitle: {
-        fontFamily: 'WixMadeforDisplayBold',
-        fontSize: 17,
-        fontWeight: '700',
-        color: '#111111',
-        marginBottom: 18,
     },
     chartBars: {
         flexDirection: 'row',
@@ -579,7 +558,7 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
     },
     chartItem: {
-        width: 44,
+        width: 35,
         alignItems: 'center',
     },
     barTrack: {
@@ -589,7 +568,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     barFill: {
-        width: 40,
+        width: 38,
         borderRadius: 20,
         backgroundColor: '#F83603',
     },
