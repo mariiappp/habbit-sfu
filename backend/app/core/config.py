@@ -55,6 +55,12 @@ class Settings(BaseSettings):
         description="Comma-separated list of allowed hosts for CORS and host header validation"
     )
 
+    # Moodle
+    moodle_url: str = Field(
+        default="https://e.sfu-kras.ru",
+        description="URL SibFU Electronic Learning System"
+    )
+
     @field_validator("log_level")
     @classmethod
     def normalize_log_level(cls, value: str) -> str:

@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 
-from app.api.v1.routes import health
+from app.api.v1.routes import health, auth
 from app.core.config import settings
 from app.db.session import init_database, close_database
 
@@ -47,6 +47,11 @@ def create_app() -> FastAPI:
         health.router,
         prefix=settings.api_v1_prefix,
         tags=["health"],
+    )
+    application.include_router(
+        auth.router,
+        prefix=settings.api_v1_prefix,
+        tags=["auth"],
     )
 
     return application
