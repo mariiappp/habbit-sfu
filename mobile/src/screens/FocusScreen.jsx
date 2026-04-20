@@ -20,7 +20,6 @@ export default function FocusScreen({ navigation }) {
 
     const [tempMinutes, setTempMinutes] = useState(String(durationMinutes));
     const [backgroundColor, setBackgroundColor] = useState('#FFFFFF');
-    const [selectedSound, setSelectedSound] = useState('Классический');
 
     const backgroundOptions = [
         '#FFFFFF',
@@ -28,14 +27,6 @@ export default function FocusScreen({ navigation }) {
         '#F2F7FB',
         '#FFF4EE',
         '#EEF8F0',
-    ];
-
-    const soundOptions = [
-        'Классический',
-        'Колокольчик',
-        'Лес',
-        'Дождь',
-        'Тишина',
     ];
 
     useEffect(() => {
@@ -192,33 +183,6 @@ export default function FocusScreen({ navigation }) {
                                 </View>
                             </View>
 
-                            <View style={styles.section}>
-                                <Text style={styles.sectionTitle}>Звук</Text>
-                                {soundOptions.map((sound) => {
-                                    const selected = sound === selectedSound;
-
-                                    return (
-                                        <TouchableOpacity
-                                            key={sound}
-                                            style={[
-                                                styles.soundOption,
-                                                selected && styles.soundOptionSelected,
-                                            ]}
-                                            onPress={() => setSelectedSound(sound)}
-                                            activeOpacity={0.85}
-                                        >
-                                            <Text
-                                                style={[
-                                                    styles.soundOptionText,
-                                                    selected && styles.soundOptionTextSelected,
-                                                ]}
-                                            >
-                                                {sound}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
 
                             <TouchableOpacity
                                 style={styles.saveButton}
@@ -391,31 +355,6 @@ const styles = StyleSheet.create({
 
     colorOptionSelected: {
         borderColor: '#F83603',
-    },
-
-    soundOption: {
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        borderRadius: 14,
-        backgroundColor: '#F7F7F7',
-        marginBottom: 10,
-    },
-
-    soundOptionSelected: {
-        backgroundColor: '#FFF0EB',
-        borderWidth: 1,
-        borderColor: '#F83603',
-    },
-
-    soundOptionText: {
-        fontFamily: 'WixMadeforDisplayMedium',
-        fontSize: 15,
-        color: '#222222',
-    },
-
-    soundOptionTextSelected: {
-        color: '#F83603',
-        fontWeight: '600',
     },
 
     saveButton: {

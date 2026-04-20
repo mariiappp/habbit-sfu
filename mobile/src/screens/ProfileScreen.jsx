@@ -32,12 +32,7 @@ export default function ProfileScreen() {
             value={notificationsEnabled}
             onToggle={() => setNotificationsEnabled((prev) => !prev)}
           />
-
-          <SettingCard
-            title="Тема"
-            value={darkThemeEnabled}
-            onToggle={() => setDarkThemeEnabled((prev) => !prev)}
-          />
+          
         </View>
       </View>
     </SafeAreaView>
