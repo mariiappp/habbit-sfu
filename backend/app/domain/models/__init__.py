@@ -33,5 +33,6 @@ class Base(DeclarativeBase):
 # Model Registration
 from app.domain.models.users import User
 from app.domain.models.habits import Habit, HabitRecurrence
+from app.domain.models.habit_completions import HabitCompletion
 
-__all__ = ["Base", "User", "Habit", "HabitRecurrence"]
+__all__ = ["Base", "User", "Habit", "HabitRecurrence", "HabitCompletion"]
