@@ -6,7 +6,7 @@ Moodle authentication flow (create-or-update on login).
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert  # ← КРИТИЧНО для ON CONFLICT
+from sqlalchemy.dialects.postgresql import insert as pg_insert 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.users import User
@@ -53,7 +53,7 @@ class UserRepository:
         Uses PostgreSQL UPSERT (INSERT ... ON CONFLICT) for atomicity.
         Guarantees a single DB round-trip and avoids race conditions.
         """
-        stmt = pg_insert(User).values(  # ← Используем PG-диалект
+        stmt = pg_insert(User).values(  
             moodle_id=moodle_id,
             username=username,
             fullname=fullname,
