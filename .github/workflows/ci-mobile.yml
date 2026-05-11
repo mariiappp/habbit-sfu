@@ -1,18 +1,18 @@
-(name: ci-mobile)
+name: ci-mobile
 
 on:
-	push:
-		paths:
-			- "mobile/**"
-			- ".github/workflows/ci-mobile.yml"
-	pull_request:
-		paths:
-			- "mobile/**"
-			- ".github/workflows/ci-mobile.yml"
+  push:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ci-mobile.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ci-mobile.yml"
 
 jobs:
-	noop:
-		runs-on: ubuntu-latest
-		steps:
-			- name: Skip
-				run: echo "CI for mobile is not configured yet. Skipping."
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip
+        run: echo "CI for mobile is not configured yet. Skipping."

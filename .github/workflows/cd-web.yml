@@ -1,11 +1,11 @@
-(name: cd-web)
+name: cd-web
 
 on:
-	workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-	noop:
-		runs-on: ubuntu-latest
-		steps:
-			- name: Skip
-				run: echo "CD for web is disabled."
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip
+        run: echo "CD for web is disabled."

@@ -1,11 +1,11 @@
-(name: cd-backend)
+name: cd-backend
 
 on:
-	workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-	noop:
-		runs-on: ubuntu-latest
-		steps:
-			- name: Skip
-				run: echo "CD for backend is disabled."
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip
+        run: echo "CD for backend is disabled."
