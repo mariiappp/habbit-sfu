@@ -1,0 +1,18 @@
+(name: ci-web)
+
+on:
+	push:
+		paths:
+			- "web/**"
+			- ".github/workflows/ci-web.yml"
+	pull_request:
+		paths:
+			- "web/**"
+			- ".github/workflows/ci-web.yml"
+
+jobs:
+	noop:
+		runs-on: ubuntu-latest
+		steps:
+			- name: Skip
+				run: echo "CI for web is not configured yet. Skipping."
