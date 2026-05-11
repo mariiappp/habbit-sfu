@@ -23,7 +23,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Install Poetry
         run: |
@@ -31,13 +31,9 @@ jobs:
           pip install poetry
 
       - name: Install dependencies
-        env:
-          POETRY_IGNORE_PYTHON_VERSION: "1"
         run: |
           poetry install --with dev --no-interaction --no-ansi
 
       - name: Run tests
-        env:
-          POETRY_IGNORE_PYTHON_VERSION: "1"
         run: |
           poetry run pytest -q
