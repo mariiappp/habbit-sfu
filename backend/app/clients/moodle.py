@@ -38,9 +38,14 @@ class MoodleClient:
             "password": password,
             "service": service,
         }
-        resp = await client.post(f"{self.base_url}/login/token.php", data=payload)
-        resp.raise_for_status()
-        data = resp.json()
+        try:
+            resp = await client.post(f"{self.base_url}/login/token.php", data=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            raise MoodleAPIError(f"Moodle auth HTTP error: {exc}") from exc
+        except ValueError as exc:
+            raise MoodleAPIError("Moodle auth returned non-JSON response") from exc
 
         if "error" in data:
             raise MoodleAPIError(f"Moodle auth failed: {data['error']}")
@@ -62,9 +67,14 @@ class MoodleClient:
             "moodlewsrestformat": "json",
             **(params or {}),
         }
-        resp = await client.post(f"{self.base_url}/webservice/rest/server.php", data=payload)
-        resp.raise_for_status()
-        data = resp.json()
+        try:
+            resp = await client.post(f"{self.base_url}/webservice/rest/server.php", data=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPError as exc:
+            raise MoodleAPIError(f"Moodle API HTTP error: {exc}") from exc
+        except ValueError as exc:
+            raise MoodleAPIError("Moodle API returned non-JSON response") from exc
 
         if isinstance(data, dict) and "exception" in data:
             raise MoodleAPIError(data.get("message", "Unknown Moodle error"))

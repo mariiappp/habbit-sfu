@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 
-from app.api.v1.routes import health, auth
+from app.api.v1.routes import health, auth, moodle, habits
 from app.core.config import settings
 from app.db.session import init_database, close_database
 
@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
     and lifecycle management.
     """
     application = FastAPI(
-        tittle=settings.project_name,
+        title=settings.project_name,
         version=settings.version,
         openapi_url=f"{settings.api_v1_prefix}/openapi.json",
         docs_url=f"{settings.api_v1_prefix}/docs",
@@ -52,6 +52,16 @@ def create_app() -> FastAPI:
         auth.router,
         prefix=settings.api_v1_prefix,
         tags=["auth"],
+    )
+    application.include_router(
+        moodle.router,
+        prefix=settings.api_v1_prefix,
+        tags=["moodle"],
+    )
+    application.include_router(
+        habits.router,
+        prefix=settings.api_v1_prefix,
+        tags=["habits"],
     )
 
     return application

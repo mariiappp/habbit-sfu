@@ -3,10 +3,11 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.api.deps.repositories import UserRepoDep
+from app.api.deps.repositories import UserRepoDep, HabitRepoDep, HabitCompletionRepoDep
 from app.clients.moodle import MoodleClient
 from app.core.config import settings
 from app.services.users import UserService
+from app.services.habits import HabitService
 
 
 def get_moodle_client() -> MoodleClient:
@@ -26,3 +27,21 @@ def get_user_service(
 
 
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
+
+
+def get_habit_service(
+    users: UserRepoDep,
+    habits: HabitRepoDep,
+    completions: HabitCompletionRepoDep,
+    moodle: MoodleClientDep,
+) -> HabitService:
+    """Assembles HabitService with injected repos and Moodle client."""
+    return HabitService(
+        users=users,
+        habits=habits,
+        completions=completions,
+        moodle=moodle,
+    )
+
+
+HabitServiceDep = Annotated[HabitService, Depends(get_habit_service)]

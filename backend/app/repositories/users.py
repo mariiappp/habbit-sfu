@@ -53,27 +53,49 @@ class UserRepository:
         Uses PostgreSQL UPSERT (INSERT ... ON CONFLICT) for atomicity.
         Guarantees a single DB round-trip and avoids race conditions.
         """
-        stmt = pg_insert(User).values(  
+        bind = self.session.get_bind()
+        dialect = bind.dialect.name if bind else "postgresql"
+
+        if dialect == "postgresql":
+            stmt = pg_insert(User).values(
+                moodle_id=moodle_id,
+                username=username,
+                fullname=fullname,
+                email=email,
+                is_active=True,
+            )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[User.moodle_id],
+                set_={
+                    "username": username,
+                    "fullname": fullname,
+                    "email": email,
+                    "is_active": True,
+                    "updated_at": func.now(),
+                },
+            ).returning(User)
+
+            result = await self.session.execute(stmt)
+            await self.session.flush()
+            return result.scalar_one()
+
+        existing = await self.get_by_moodle_id(moodle_id)
+        if existing:
+            existing.username = username
+            existing.fullname = fullname
+            existing.email = email
+            existing.is_active = True
+            await self.session.flush()
+            await self.session.refresh(existing)
+            return existing
+
+        return await self.create(
             moodle_id=moodle_id,
             username=username,
             fullname=fullname,
             email=email,
             is_active=True,
         )
-        stmt = stmt.on_conflict_do_update(
-            index_elements=[User.moodle_id],  # Unique index on moodle_id
-            set_={
-                "username": username,
-                "fullname": fullname,
-                "email": email,
-                "is_active": True,
-                "updated_at": func.now(),
-            },
-        ).returning(User)
-
-        result = await self.session.execute(stmt)
-        await self.session.flush()
-        return result.scalar_one()
 
     async def update(self, user: User, update_data: dict[str, Any]) -> User:
         """Update existing user attributes."""
