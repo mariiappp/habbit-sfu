@@ -8,6 +8,7 @@ from app.clients.moodle import MoodleClient
 from app.core.config import settings
 from app.services.users import UserService
 from app.services.habits import HabitService
+from app.services.moodle import MoodleService
 
 
 def get_moodle_client() -> MoodleClient:
@@ -45,3 +46,13 @@ def get_habit_service(
 
 
 HabitServiceDep = Annotated[HabitService, Depends(get_habit_service)]
+
+
+def get_moodle_service(
+    moodle: MoodleClientDep,
+) -> MoodleService:
+    """Assembles MoodleService with injected Moodle client."""
+    return MoodleService(moodle=moodle)
+
+
+MoodleServiceDep = Annotated[MoodleService, Depends(get_moodle_service)]

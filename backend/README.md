@@ -55,6 +55,7 @@ APP_MOODLE_URL=https://e.sfu-kras.ru
 
 - **UserService**: Moodle auth and user sync.
 - **HabitService**: habit CRUD, completion tracking, calendar history.
+- **MoodleService**: Moodle data access via `wstoken`.
 
 ### API endpoints
 
@@ -68,6 +69,12 @@ Health:
 
 Moodle:
 - `GET /moodle/courses?wstoken=...`
+- `GET /moodle/courses/{course_id}/contents?wstoken=...`
+- `GET /moodle/courses/{course_id}/completion-status?wstoken=...`
+- `GET /moodle/assignments?wstoken=...&course_ids=1,2,3`
+- `GET /moodle/calendar/events?wstoken=...&time_from=...&time_to=...&limit_from=...&limit_num=...`
+- `GET /moodle/courses/{course_id}/grade-items?wstoken=...`
+- `GET /moodle/grades/overview?wstoken=...`
 
 Habits:
 - `POST /habits?wstoken=...`
@@ -83,6 +90,11 @@ Habits:
 ### Auth model
 
 The API uses Moodle `wstoken` passed as query parameter `wstoken`.
+
+### Moodle notes
+
+- `time_from` and `time_to` are Unix timestamps (UTC seconds).
+- `limit_from` is an offset, `limit_num` is a page size.
 
 ### Run locally
 
