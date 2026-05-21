@@ -76,6 +76,27 @@ class HabitCompletionRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_user_completions_in_range(
+        self,
+        user_id: int,
+        start_date: date,
+        end_date: date,
+    ) -> list[HabitCompletion]:
+        """Fetch all completion events for a user within date range."""
+        start_dt = datetime.combine(start_date, time.min)
+        end_dt = datetime.combine(end_date, time.max)
+        stmt = (
+            select(HabitCompletion)
+            .where(
+                HabitCompletion.user_id == user_id,
+                HabitCompletion.completed_at >= start_dt,
+                HabitCompletion.completed_at <= end_dt,
+            )
+            .order_by(HabitCompletion.completed_at.asc())
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def delete(self, completion_id: int, user_id: int) -> bool:
         """Remove a completion log (undo action)."""
         stmt = delete(HabitCompletion).where(

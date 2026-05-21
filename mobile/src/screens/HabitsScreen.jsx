@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,30 +9,62 @@ import {
   Pressable,
   TextInput,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import FireIcon from '../../assets/images/Fire.svg';
+import API_BASE_URL from '../api/config';
+import { getHabitsCache, setHabitsCache } from '../storage/habitsStorage';
 
-function normalizeDate(date) {
-  const d = new Date(date);
+const REPEAT_OPTIONS = [
+  'Каждый день',
+  'Раз в неделю',
+  'Раз в месяц',
+];
+
+const RECURRENCE_MAP = {
+  'Каждый день': 'daily',
+  'Раз в неделю': 'weekly',
+  'Раз в месяц': 'monthly',
+};
+
+const RECURRENCE_LABELS = {
+  daily: 'Каждый день',
+  weekly: 'Раз в неделю',
+  monthly: 'Раз в месяц',
+};
+
+function parseDateKey(dateString) {
+  if (!dateString) return new Date(NaN);
+  const [y, m, d] = dateString.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+function normalizeDate(value) {
+  if (!value) return new Date(NaN);
+  if (typeof value === 'string') {
+    const dateKey = value.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+      const parsed = parseDateKey(dateKey);
+      parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    }
+  }
+  const d = new Date(value);
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
 function toDateKey(date) {
+  if (!date) return '';
+  if (typeof date === 'string') {
+    return date.slice(0, 10);
+  }
   const d = normalizeDate(date);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
-}
-
-function fromDateKey(key) {
-  const [y, m, d] = key.split('-').map(Number);
-  return normalizeDate(new Date(y, m - 1, d));
-}
-
-function isSameDay(a, b) {
-  return toDateKey(a) === toDateKey(b);
 }
 
 function addDays(date, n) {
@@ -43,175 +75,270 @@ function addDays(date, n) {
 
 function isoWeekday(date) {
   const d = normalizeDate(date);
-  return (d.getDay() + 6) % 7; 
+  return (d.getDay() + 6) % 7;
 }
 
-function getWeekRange(date) {
+function getWeekStart(date) {
   const d = normalizeDate(date);
-  const dow = isoWeekday(d);
-  const start = addDays(d, -dow);
-  const end = addDays(start, 6);
-  return { start, end };
+  const diff = isoWeekday(d);
+  return addDays(d, -diff);
 }
 
-const REPEAT_OPTIONS = [
-  'Каждый день',
-  '3 раза в неделю',
-  'Через день',
-  'По будням',
-];
-
-
-function createHabit(title, repeatType, createdDate) {
-  return {
-    id: String(Date.now()),
-    title,
-    repeatType,
-    createdDate: createdDate ?? toDateKey(new Date()),
-    completedDates: [],
-  };
+function getWeekEnd(date) {
+  return addDays(getWeekStart(date), 6);
 }
 
-function isHabitCompletedOnDate(habit, date) {
-  const key = toDateKey(date);
-  return habit.completedDates.includes(key);
-}
-
-function isHabitCompletedToday(habit, today) {
-  return isHabitCompletedOnDate(habit, today);
-}
-
-function toggleHabitCompletionForDate(habit, date) {
-  const key = toDateKey(date);
-  const already = habit.completedDates.includes(key);
-  return {
-    ...habit,
-    completedDates: already
-      ? habit.completedDates.filter((d) => d !== key)
-      : [...habit.completedDates, key],
-  };
-}
-
-function countHabitCompletionsInWeek(habit, dateInWeek) {
-  const { start, end } = getWeekRange(dateInWeek);
-  return habit.completedDates.filter((key) => {
-    const d = fromDateKey(key);
-    return d >= start && d <= end;
-  }).length;
-}
-
-function isHabitRequiredOnDate(habit, date) {
+function getMonthStart(date) {
   const d = normalizeDate(date);
-  const created = fromDateKey(habit.createdDate);
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
 
-  if (d < created) return false;
+function getMonthEnd(date) {
+  const d = normalizeDate(date);
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
 
-  switch (habit.repeatType) {
-    case 'Каждый день':
+function hasCompletionInRange(completionSet, start, end) {
+  if (!completionSet || completionSet.size === 0) return false;
+  let cursor = normalizeDate(start);
+  const endDate = normalizeDate(end);
+  while (cursor <= endDate) {
+    if (completionSet.has(toDateKey(cursor))) {
       return true;
-
-    case 'По будням': {
-      const dow = isoWeekday(d); 
-      return dow <= 4;
     }
+    cursor = addDays(cursor, 1);
+  }
+  return false;
+}
 
-    case 'Через день': {
-      const diffMs = d.getTime() - created.getTime();
-      const diffDays = Math.round(diffMs / 86400000);
-      return diffDays % 2 === 0;
+function isHabitActiveOnDate(habit, date) {
+  if (!habit?.created_at) return true;
+  return normalizeDate(date) >= normalizeDate(habit.created_at);
+}
+
+function isHabitSatisfiedForDate(habit, date, completionSet) {
+  if (!isHabitActiveOnDate(habit, date)) return true;
+  const dateKey = toDateKey(date);
+
+  switch (habit.recurrence) {
+    case 'daily':
+      return completionSet?.has(dateKey) ?? false;
+    case 'weekly': {
+      const start = getWeekStart(date);
+      const end = getWeekEnd(date);
+      const activeStart = normalizeDate(habit.created_at) > start ? normalizeDate(habit.created_at) : start;
+      return hasCompletionInRange(completionSet, activeStart, end);
     }
-
-    case '3 раза в неделю':
-      return true;
-
+    case 'monthly': {
+      const start = getMonthStart(date);
+      const end = getMonthEnd(date);
+      const activeStart = normalizeDate(habit.created_at) > start ? normalizeDate(habit.created_at) : start;
+      return hasCompletionInRange(completionSet, activeStart, end);
+    }
     default:
-      return true;
+      return completionSet?.has(dateKey) ?? false;
   }
 }
 
+function withToken(path, token) {
+  if (!token) return path;
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}wstoken=${encodeURIComponent(token)}`;
+}
 
-function isHabitPlanSatisfied(habit, date, today) {
-  if (!isHabitRequiredOnDate(habit, date)) {
-    return true;
+async function apiRequest(path, token, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${withToken(path, token)}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+
+  if (response.status === 204) {
+    return null;
   }
 
-  switch (habit.repeatType) {
-    case 'Каждый день':
-    case 'По будням':
-    case 'Через день':
-      return isHabitCompletedOnDate(habit, date);
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(text || `HTTP ${response.status}`);
+  }
 
-    case '3 раза в неделю': {
-      const { end: weekEnd } = getWeekRange(date);
-      const todayNorm = normalizeDate(today);
-      const completions = countHabitCompletionsInWeek(habit, date);
+  return text ? JSON.parse(text) : null;
+}
 
-      if (todayNorm < weekEnd) {
-        const daysLeft =
-          Math.round((weekEnd.getTime() - todayNorm.getTime()) / 86400000) + 1;
-        return completions + daysLeft >= 3;
-      } else {
-        return completions >= 3;
-      }
+async function fetchHabits(token) {
+  return apiRequest('/habits', token, { method: 'GET' });
+}
+
+async function createHabit(token, payload) {
+  return apiRequest('/habits', token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function fetchCompletions(token, habitId, limit = 365) {
+  return apiRequest(`/habits/${habitId}/completions?limit=${limit}`, token, {
+    method: 'GET',
+  });
+}
+
+async function createCompletion(token, habitId) {
+  return apiRequest(`/habits/${habitId}/completions`, token, {
+    method: 'POST',
+    body: JSON.stringify({ note: null }),
+  });
+}
+
+async function deleteCompletion(token, habitId, completionId) {
+  return apiRequest(`/habits/${habitId}/completions/${completionId}`, token, {
+    method: 'DELETE',
+  });
+}
+
+function buildCompletionIndex(completions) {
+  const idByDate = {};
+  const dates = [];
+
+  completions.forEach((item) => {
+    const dateKey = toDateKey(item.completed_at);
+    if (!idByDate[dateKey]) {
+      dates.push(dateKey);
     }
+    idByDate[dateKey] = item.id;
+  });
 
-    default:
-      return isHabitCompletedOnDate(habit, date);
-  }
+  return { dates, idByDate };
 }
 
-
-function calculateCurrentStreak(habits, today) {
-  if (!habits.length) return 0;
-
-  let streak = 0;
-  const todayNorm = normalizeDate(today);
-
-  const earliestCreated = habits.reduce((earliest, h) => {
-    const d = fromDateKey(h.createdDate);
-    return d < earliest ? d : earliest;
-  }, todayNorm);
-
-  let cursor = todayNorm;
-
-  while (cursor >= earliestCreated) {
-    const activeHabits = habits.filter((h) => {
-      const created = fromDateKey(h.createdDate);
-      return normalizeDate(cursor) >= created;
-    });
-
-    if (!activeHabits.length) break;
-
-    const allSatisfied = activeHabits.every((h) =>
-      isHabitPlanSatisfied(h, cursor, todayNorm)
-    );
-
-    if (!allSatisfied) break;
-
-    streak += 1;
-    cursor = addDays(cursor, -1);
-  }
-
-  return streak;
+function getHabitSubtitle(habit) {
+  return RECURRENCE_LABELS[habit.recurrence] || 'По расписанию';
 }
 
-export default function HabitsScreen() {
+export default function HabitsScreen({ accessToken }) {
   const [habits, setHabits] = useState([]);
+  const [completionsByHabit, setCompletionsByHabit] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [pendingHabitIds, setPendingHabitIds] = useState({});
 
   const [showModal, setShowModal] = useState(false);
   const [newHabitTitle, setNewHabitTitle] = useState('');
   const [selectedRepeat, setSelectedRepeat] = useState(REPEAT_OPTIONS[0]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const today = useMemo(() => normalizeDate(new Date()), []);
+  const todayDate = useMemo(() => normalizeDate(new Date()), []);
+  const todayKey = useMemo(() => toDateKey(todayDate), [todayDate]);
 
-  const streakDays = useMemo(
-    () => calculateCurrentStreak(habits, today),
-    [habits, today]
-  );
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCache = async () => {
+      try {
+        const cached = await getHabitsCache();
+        if (!isMounted || !cached) return;
+        setHabits(cached.habits || []);
+        setCompletionsByHabit(cached.completions || {});
+      } catch (error) {
+        console.warn('Failed to load habits cache:', error);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadCache();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncHabits = async () => {
+      if (!accessToken) return;
+      setIsSyncing(true);
+
+      try {
+        const remoteHabits = await fetchHabits(accessToken);
+        const completionEntries = await Promise.all(
+          remoteHabits.map(async (habit) => {
+            const completions = await fetchCompletions(accessToken, habit.id);
+            return [habit.id, buildCompletionIndex(completions || [])];
+          })
+        );
+        const nextCompletions = Object.fromEntries(completionEntries);
+
+        if (!isMounted) return;
+        setHabits(remoteHabits);
+        setCompletionsByHabit(nextCompletions);
+      } catch (error) {
+        console.warn('Failed to sync habits:', error);
+        if (isMounted) {
+          Alert.alert('Ошибка', 'Не удалось загрузить привычки.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    syncHabits();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!habits.length && !Object.keys(completionsByHabit).length) return;
+    setHabitsCache({
+      habits,
+      completions: completionsByHabit,
+      updatedAt: new Date().toISOString(),
+    }).catch((error) => console.warn('Failed to persist habits cache:', error));
+  }, [habits, completionsByHabit]);
+
+  const completionSets = useMemo(() => {
+    const sets = {};
+    Object.entries(completionsByHabit).forEach(([habitId, data]) => {
+      sets[habitId] = new Set(data?.dates || []);
+    });
+    return sets;
+  }, [completionsByHabit]);
+
+  const streakDays = useMemo(() => {
+    if (!habits.length) return 0;
+    let streak = 0;
+    let cursor = normalizeDate(todayDate);
+    const earliest = habits.reduce((minDate, habit) => {
+      if (!habit?.created_at) return minDate;
+      const created = normalizeDate(habit.created_at);
+      return created < minDate ? created : minDate;
+    }, cursor);
+
+    while (cursor >= earliest) {
+      const allSatisfied = habits.every((habit) =>
+        isHabitSatisfiedForDate(habit, cursor, completionSets[habit.id])
+      );
+      if (!allSatisfied) break;
+      streak += 1;
+      cursor = addDays(cursor, -1);
+    }
+
+    return streak;
+  }, [habits, completionSets]);
 
   const completedTodayCount = useMemo(
-    () => habits.filter((h) => isHabitCompletedToday(h, today)).length,
-    [habits, today]
+    () => habits.filter((habit) =>
+      isHabitSatisfiedForDate(habit, todayDate, completionSets[habit.id])
+    ).length,
+    [habits, completionSets, todayDate]
   );
 
   const handleOpenAddHabit = () => {
@@ -220,22 +347,112 @@ export default function HabitsScreen() {
     setShowModal(true);
   };
 
-  const handleSaveHabit = () => {
-    if (!newHabitTitle.trim()) return;
+  const handleSaveHabit = async () => {
+    if (!newHabitTitle.trim() || isSaving) return;
+    if (!accessToken) {
+      Alert.alert('Ошибка', 'Нет токена доступа. Перезайдите в аккаунт.');
+      return;
+    }
 
-    const habit = createHabit(newHabitTitle.trim(), selectedRepeat);
-
-    setHabits((prev) => [...prev, habit]);
-    setShowModal(false);
+    setIsSaving(true);
+    try {
+      const payload = {
+        title: newHabitTitle.trim(),
+        description: null,
+        recurrence: RECURRENCE_MAP[selectedRepeat] || 'daily',
+      };
+      const created = await createHabit(accessToken, payload);
+      setHabits((prev) => [...prev, created]);
+      setCompletionsByHabit((prev) => ({
+        ...prev,
+        [created.id]: { dates: [], idByDate: {} },
+      }));
+      setShowModal(false);
+    } catch (error) {
+      Alert.alert('Ошибка', 'Не удалось создать привычку.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const toggleHabit = (id) => {
-    setHabits((prev) =>
-      prev.map((h) =>
-        h.id === id ? toggleHabitCompletionForDate(h, today) : h
-      )
+  const toggleHabit = async (habitId) => {
+    if (!accessToken) {
+      Alert.alert('Ошибка', 'Нет токена доступа. Перезайдите в аккаунт.');
+      return;
+    }
+
+    if (pendingHabitIds[habitId]) return;
+
+    const existing = completionsByHabit[habitId] || { dates: [], idByDate: {} };
+    const todayCompletionId = existing.idByDate?.[todayKey];
+    const previous = {
+      dates: [...existing.dates],
+      idByDate: { ...existing.idByDate },
+    };
+
+    const nextDates = todayCompletionId
+      ? existing.dates.filter((date) => date !== todayKey)
+      : Array.from(new Set([...existing.dates, todayKey]));
+    const nextIdByDate = { ...existing.idByDate };
+    if (todayCompletionId) {
+      delete nextIdByDate[todayKey];
+    } else {
+      nextIdByDate[todayKey] = null;
+    }
+
+    setCompletionsByHabit((prev) => ({
+      ...prev,
+      [habitId]: { dates: nextDates, idByDate: nextIdByDate },
+    }));
+    setPendingHabitIds((prev) => ({ ...prev, [habitId]: true }));
+
+    try {
+      if (todayCompletionId) {
+        await deleteCompletion(accessToken, habitId, todayCompletionId);
+        return;
+      }
+
+      const created = await createCompletion(accessToken, habitId);
+      const completedAt = created?.completed_at ? new Date(created.completed_at) : new Date();
+      const createdKey = toDateKey(completedAt);
+
+      setCompletionsByHabit((prev) => {
+        const current = prev[habitId] || { dates: [], idByDate: {} };
+        const updatedDates = new Set(current.dates);
+        updatedDates.add(createdKey);
+        if (createdKey !== todayKey) {
+          updatedDates.delete(todayKey);
+        }
+        const updatedIds = { ...current.idByDate };
+        updatedIds[createdKey] = created?.id ?? updatedIds[createdKey];
+        if (createdKey !== todayKey) {
+          delete updatedIds[todayKey];
+        }
+        return {
+          ...prev,
+          [habitId]: { dates: Array.from(updatedDates), idByDate: updatedIds },
+        };
+      });
+    } catch (error) {
+      setCompletionsByHabit((prev) => ({
+        ...prev,
+        [habitId]: previous,
+      }));
+      Alert.alert('Ошибка', 'Не удалось обновить выполнение привычки.');
+    } finally {
+      setPendingHabitIds((prev) => ({ ...prev, [habitId]: false }));
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color="#F83603" />
+        </View>
+      </SafeAreaView>
     );
-  };
+  }
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
@@ -244,7 +461,10 @@ export default function HabitsScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Привычки</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Привычки</Text>
+          {isSyncing && <Text style={styles.syncText}>Синхронизация...</Text>}
+        </View>
 
         <View style={styles.streakBlock}>
           <FireIcon width={180} height={180} />
@@ -254,12 +474,12 @@ export default function HabitsScreen() {
 
         {habits.length > 0 && (
           <View style={styles.progressBarRow}>
-            {habits.map((h) => (
+            {habits.map((habit) => (
               <View
-                key={h.id}
+                key={habit.id}
                 style={[
                   styles.progressSection,
-                  isHabitCompletedToday(h, today) &&
+                  isHabitSatisfiedForDate(habit, todayDate, completionSets[habit.id]) &&
                     styles.progressSectionActive,
                 ]}
               />
@@ -272,8 +492,8 @@ export default function HabitsScreen() {
             <HabitCard
               key={habit.id}
               title={habit.title}
-              subtitle={habit.repeatType}
-              completed={isHabitCompletedToday(habit, today)}
+              subtitle={getHabitSubtitle(habit)}
+              completed={isHabitSatisfiedForDate(habit, todayDate, completionSets[habit.id])}
               onPress={() => toggleHabit(habit.id)}
             />
           ))}
@@ -287,6 +507,12 @@ export default function HabitsScreen() {
             <Text style={styles.addHabitPlus}>+</Text>
           </TouchableOpacity>
         </View>
+
+        {habits.length > 0 && (
+          <Text style={styles.completedHint}>
+            Выполнено сегодня: {completedTodayCount}/{habits.length}
+          </Text>
+        )}
       </ScrollView>
 
       <Modal
@@ -342,12 +568,17 @@ export default function HabitsScreen() {
             <TouchableOpacity
               style={[
                 styles.saveButton,
-                !newHabitTitle.trim() && styles.saveButtonDisabled,
+                (!newHabitTitle.trim() || isSaving) && styles.saveButtonDisabled,
               ]}
               activeOpacity={0.9}
               onPress={handleSaveHabit}
+              disabled={isSaving}
             >
-              <Text style={styles.saveButtonText}>Сохранить</Text>
+              {isSaving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>Сохранить</Text>
+              )}
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -386,15 +617,28 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 50,
   },
-
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 30,
+  },
   title: {
     fontFamily: 'WixMadeforDisplayBold',
     fontSize: 18,
     fontWeight: '700',
     color: '#111111',
-    marginBottom: 30,
   },
-
+  syncText: {
+    fontSize: 12,
+    color: '#9A9A9A',
+    fontFamily: 'WixMadeforDisplayMedium',
+  },
   streakBlock: {
     alignItems: 'center',
     marginBottom: 50,
@@ -412,7 +656,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#222222',
   },
-
   progressBarRow: {
     flexDirection: 'row',
     gap: 10,
@@ -427,11 +670,9 @@ const styles = StyleSheet.create({
   progressSectionActive: {
     backgroundColor: '#F83603',
   },
-
   listBlock: {
     gap: 16,
   },
-
   habitCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
@@ -462,7 +703,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333333',
   },
-
   checkCircle: {
     width: 22,
     height: 22,
@@ -475,7 +715,6 @@ const styles = StyleSheet.create({
     borderColor: '#F83603',
     backgroundColor: '#F83603',
   },
-
   addHabitCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
@@ -503,7 +742,13 @@ const styles = StyleSheet.create({
     color: '#111111',
     fontWeight: '400',
   },
-
+  completedHint: {
+    marginTop: 16,
+    fontFamily: 'WixMadeforDisplayMedium',
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.24)',
@@ -522,7 +767,6 @@ const styles = StyleSheet.create({
     color: '#111111',
     marginBottom: 18,
   },
-
   input: {
     fontFamily: 'WixMadeforDisplayMedium',
     height: 52,
@@ -533,7 +777,6 @@ const styles = StyleSheet.create({
     color: '#111111',
     marginBottom: 18,
   },
-
   repeatTitle: {
     fontFamily: 'WixMadeforDisplayBold',
     fontSize: 16,
@@ -565,7 +808,6 @@ const styles = StyleSheet.create({
     color: '#F83603',
     fontWeight: '600',
   },
-
   saveButton: {
     height: 54,
     borderRadius: 18,

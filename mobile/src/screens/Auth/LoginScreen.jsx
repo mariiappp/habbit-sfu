@@ -9,16 +9,70 @@ import {
     Platform,
     TouchableWithoutFeedback,
     Keyboard,
+    ActivityIndicator,
 } from 'react-native';
 import LogoHabbit from "../../../assets/images/LogoHabbit.svg";
+import API_BASE_URL from '../../api/config';
 
 
-export default function LoginScreen({ onLogin }) {
+export default function LoginScreen({ onLoginSuccess }) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleLogin = () => {
-        onLogin();
+    const handleLogin = async () => {
+        if (isSubmitting) return;
+        const trimmedUsername = username.trim();
+        const trimmedPassword = password;
+
+        if (!trimmedUsername || !trimmedPassword) {
+            setErrorMessage('Введите логин и пароль.');
+            return;
+        }
+
+        setIsSubmitting(true);
+        setErrorMessage('');
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/moodle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: trimmedUsername,
+                    password: trimmedPassword,
+                    service: 'moodle_mobile_app',
+                }),
+            });
+
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (error) {
+                data = null;
+            }
+
+            if (!response.ok) {
+                const serverMessage =
+                    data?.detail?.error_description ||
+                    data?.detail?.error ||
+                    data?.error_description;
+                throw new Error(serverMessage || 'Не удалось войти. Попробуйте снова.');
+            }
+
+            const token = data?.access_token;
+            if (!token) {
+                throw new Error('Moodle не вернул токен. Попробуйте снова.');
+            }
+
+            await onLoginSuccess(token);
+        } catch (error) {
+            setErrorMessage(error?.message || 'Не удалось войти. Попробуйте снова.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
 
@@ -52,8 +106,21 @@ export default function LoginScreen({ onLogin }) {
                             secureTextEntry
                         />
 
-                        <TouchableOpacity style={styles.button} onPress={handleLogin} activeOpacity={0.9}>
-                            <Text style={styles.buttonText}>Войти</Text>
+                        {!!errorMessage && (
+                            <Text style={styles.errorText}>{errorMessage}</Text>
+                        )}
+
+                        <TouchableOpacity
+                            style={[styles.button, isSubmitting && styles.buttonDisabled]}
+                            onPress={handleLogin}
+                            activeOpacity={0.9}
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? (
+                                <ActivityIndicator color="#FFFFFF" />
+                            ) : (
+                                <Text style={styles.buttonText}>Войти</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -93,6 +160,14 @@ const styles = StyleSheet.create({
         color: '#000000',
         marginBottom: 24,
     },
+    errorText: {
+        width: '100%',
+        color: '#D32F2F',
+        fontFamily: 'WixMadeforDisplayMedium',
+        fontSize: 13,
+        marginBottom: 12,
+        textAlign: 'center',
+    },
     button: {
         width: '100%',
         height: 56,
@@ -101,6 +176,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: 4,
+    },
+    buttonDisabled: {
+        opacity: 0.7,
     },
     buttonText: {
         fontFamily: 'WixMadeforDisplaySemiBold',

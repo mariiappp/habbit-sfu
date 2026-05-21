@@ -21,6 +21,15 @@ class DailyAdviceRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_for_date(self, user_id: int, target_date: date) -> DailyAdvice | None:
+        """Fetch advice for a specific user and date."""
+        stmt = select(DailyAdvice).where(
+            DailyAdvice.user_id == user_id,
+            DailyAdvice.advice_date == target_date,
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def create(self, user_id: int, target_date: date, content: str) -> DailyAdvice:
         """Create a new daily advice entry."""
         advice = DailyAdvice(user_id=user_id, advice_date=target_date, content=content)

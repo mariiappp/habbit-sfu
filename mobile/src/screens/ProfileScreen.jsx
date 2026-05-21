@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,27 @@ import {
   SafeAreaView
 } from 'react-native';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ profile, isProfileLoading }) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkThemeEnabled, setDarkThemeEnabled] = useState(false);
+
+  const displayName = useMemo(() => {
+    if (!profile) return 'Профиль';
+    if (profile.fullname) return profile.fullname;
+    const first = profile.firstname || '';
+    const last = profile.lastname || '';
+    const combined = `${first} ${last}`.trim();
+    return combined || profile.username || 'Профиль';
+  }, [profile]);
+
+  const tags = useMemo(() => {
+    if (!profile) return [];
+    const result = [];
+    if (profile.username) result.push(`@${profile.username}`);
+    if (profile.userid) result.push(`ID ${profile.userid}`);
+    if (profile.lang) result.push(profile.lang.toUpperCase());
+    return result.slice(0, 3);
+  }, [profile]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
@@ -17,13 +35,17 @@ export default function ProfileScreen() {
         <Text style={styles.topTitle}>Профиль</Text>
 
         <View style={styles.headerBlock}>
-          <Text style={styles.userName}>Иван Иванов</Text>
+          <Text style={styles.userName}>
+            {isProfileLoading ? 'Загрузка профиля...' : displayName}
+          </Text>
 
-          <View style={styles.tagsRow}>
-            <StaticTag text="ИКИТ" />
-            <StaticTag text="1 курс" />
-            <StaticTag text="Программная инженерия" />
-          </View>
+          {tags.length > 0 && (
+            <View style={styles.tagsRow}>
+              {tags.map((tag) => (
+                <StaticTag key={tag} text={tag} />
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.settingsBlock}>

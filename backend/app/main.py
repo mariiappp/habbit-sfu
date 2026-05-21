@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 
-from app.api.v1.routes import health, auth, moodle, habits
+from app.api.v1.routes import health, auth, moodle, habits, dashboard, advice, tasks
 from app.core.config import settings
 from app.db.session import init_database, close_database
 
@@ -62,6 +62,21 @@ def create_app() -> FastAPI:
         habits.router,
         prefix=settings.api_v1_prefix,
         tags=["habits"],
+    )
+    application.include_router(
+        dashboard.router,
+        prefix=settings.api_v1_prefix,
+        tags=["dashboard"],
+    )
+    application.include_router(
+        advice.router,
+        prefix=settings.api_v1_prefix,
+        tags=["advice"],
+    )
+    application.include_router(
+        tasks.router,
+        prefix=settings.api_v1_prefix,
+        tags=["tasks"],
     )
 
     return application

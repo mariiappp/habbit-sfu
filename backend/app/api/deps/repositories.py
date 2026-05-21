@@ -7,6 +7,8 @@ from app.api.deps.database import DbSessionDep
 from app.repositories.users import UserRepository
 from app.repositories.habits import HabitRepository
 from app.repositories.habit_completions import HabitCompletionRepository
+from app.repositories.daily_advice import DailyAdviceRepository
+from app.repositories.tasks import TaskRepository
 
 
 def get_user_repo(db: DbSessionDep) -> UserRepository:
@@ -26,3 +28,19 @@ def get_habit_completion_repo(db: DbSessionDep) -> HabitCompletionRepository:
 UserRepoDep = Annotated[UserRepository, Depends(get_user_repo)]
 HabitRepoDep = Annotated[HabitRepository, Depends(get_habit_repo)]
 HabitCompletionRepoDep = Annotated[HabitCompletionRepository, Depends(get_habit_completion_repo)]
+
+
+def get_daily_advice_repo(db: DbSessionDep) -> DailyAdviceRepository:
+    """Injects DailyAdviceRepository bound to current request session."""
+    return DailyAdviceRepository(session=db)
+
+
+DailyAdviceRepoDep = Annotated[DailyAdviceRepository, Depends(get_daily_advice_repo)]
+
+
+def get_task_repo(db: DbSessionDep) -> TaskRepository:
+    """Injects TaskRepository bound to current request session."""
+    return TaskRepository(session=db)
+
+
+TaskRepoDep = Annotated[TaskRepository, Depends(get_task_repo)]

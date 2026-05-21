@@ -35,5 +35,14 @@ from app.domain.models.users import User
 from app.domain.models.habits import Habit, HabitRecurrence
 from app.domain.models.habit_completions import HabitCompletion
 from app.domain.models.daily_advice import DailyAdvice
+from app.domain.models.tasks import Task
 
-__all__ = ["Base", "User", "Habit", "HabitRecurrence", "HabitCompletion", "DailyAdvice"]
+__all__ = [
+    "Base",
+    "User",
+    "Habit",
+    "HabitRecurrence",
+    "HabitCompletion",
+    "DailyAdvice",
+    "Task",
+]

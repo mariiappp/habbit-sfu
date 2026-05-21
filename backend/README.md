@@ -68,13 +68,22 @@ Health:
 - `GET /health`
 
 Moodle:
+- `GET /moodle/user?wstoken=...`
+- `GET /moodle/users/by-field?wstoken=...&field=...&values=a,b`
 - `GET /moodle/courses?wstoken=...`
+- `GET /moodle/courses/all?wstoken=...&course_ids=1,2`
 - `GET /moodle/courses/{course_id}/contents?wstoken=...`
 - `GET /moodle/courses/{course_id}/completion-status?wstoken=...`
+- `GET /moodle/courses/{course_id}/updates?wstoken=...&since=...`
 - `GET /moodle/assignments?wstoken=...&course_ids=1,2,3`
-- `GET /moodle/calendar/events?wstoken=...&time_from=...&time_to=...&limit_from=...&limit_num=...`
+- `GET /moodle/assignments/{assignment_id}/submission-status?wstoken=...`
+- `GET /moodle/assignments/submissions?wstoken=...&assignment_ids=1,2`
+- `GET /moodle/calendar/events?wstoken=...&time_from=...&time_to=...&course_ids=...&group_ids=...&user_ids=...`
 - `GET /moodle/courses/{course_id}/grade-items?wstoken=...`
+- `GET /moodle/grades/table?wstoken=...&course_id=...&user_id=...`
+- `GET /moodle/grades?wstoken=...&course_id=...&component=...&activity_id=...&user_ids=...`
 - `GET /moodle/grades/overview?wstoken=...`
+- `GET /moodle/messages?wstoken=...&user_id_to=...&user_id_from=...`
 
 Habits:
 - `POST /habits?wstoken=...`
@@ -94,7 +103,8 @@ The API uses Moodle `wstoken` passed as query parameter `wstoken`.
 ### Moodle notes
 
 - `time_from` and `time_to` are Unix timestamps (UTC seconds).
-- `limit_from` is an offset, `limit_num` is a page size.
+- `course_ids`, `group_ids`, `user_ids`, `assignment_ids`, `values` are comma-separated lists.
+- `include_site_events`, `include_user_events`, `include_group_events` enable event scopes in calendar requests.
 
 ### Run locally
 

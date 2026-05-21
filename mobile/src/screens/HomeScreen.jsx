@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   SafeAreaView,
   View,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Svg, {
   Circle,
   Defs,
@@ -20,8 +21,8 @@ import Habits from '../../assets/images/homeScreenIcons/Habits.svg';
 import Lock from '../../assets/images/homeScreenIcons/Lock.svg';
 import ScreenTime from '../../assets/images/homeScreenIcons/ScreenTime.svg';
 import Tasks from '../../assets/images/homeScreenIcons/Tasks.svg';
-
-const API_BASE_URL = 'https://your-backend-domain/api/v1';
+import API_BASE_URL from '../api/config';
+import { getScreenTimeSeconds } from '../storage/screenTimeStorage';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -56,7 +57,8 @@ const calculateBalance = ({
 
 async function getDeviceScreenTimeHours() {
   try {
-    return 0;
+    const seconds = await getScreenTimeSeconds();
+    return Math.round((seconds / 3600) * 10) / 10;
   } catch (error) {
     console.log('Не удалось получить экранное время устройства:', error);
     return 0;
@@ -81,30 +83,20 @@ async function apiRequest(path, options = {}) {
 }
 
 async function fetchHomeDashboard({ date, token }) {
-  return apiRequest(`/dashboard/home?date=${date}`, {
+  const tokenQuery = token ? `&wstoken=${encodeURIComponent(token)}` : '';
+  return apiRequest(`/dashboard/home?date=${date}${tokenQuery}`, {
     method: 'GET',
-    headers: token
-      ? {
-        Authorization: `Bearer ${token}`,
-      }
-      : {},
   });
 }
 
 async function fetchDailyAdvice({ date, token }) {
-  return apiRequest(`/advice/daily?date=${date}`, {
+  const tokenQuery = token ? `&wstoken=${encodeURIComponent(token)}` : '';
+  return apiRequest(`/advice/daily?date=${date}${tokenQuery}`, {
     method: 'GET',
-    headers: token
-      ? {
-        Authorization: `Bearer ${token}`,
-      }
-      : {},
   });
 }
 
-export default function HomeScreen() {
-
-  const accessToken = null;
+export default function HomeScreen({ accessToken, profile }) {
 
   const [isLoading, setIsLoading] = useState(true);
 
@@ -143,92 +135,108 @@ export default function HomeScreen() {
     });
   }, [tasksDone, tasksTotal, habitsDone, habitsTotal, screenTime, screenLimit]);
 
+  const greetingName =
+    profile?.firstname ||
+    profile?.fullname ||
+    profile?.username ||
+    userName;
+
   useEffect(() => {
-    let isMounted = true;
+    if (!profile) return;
+    const nextName =
+      profile.firstname ||
+      profile.fullname ||
+      profile.username ||
+      'Студент';
+    setUserName(nextName);
+  }, [profile]);
 
-    const loadHomeData = async () => {
-      try {
-        setIsLoading(true);
+  const loadHomeData = useCallback(async (isMountedRef) => {
+    try {
+      setIsLoading(true);
 
-        const today = getTodayDateString();
+      const today = getTodayDateString();
 
-        const [deviceScreenTime, dashboard, advice] = await Promise.all([
-          getDeviceScreenTimeHours(),
-          fetchHomeDashboard({
-            date: today,
-            token: accessToken,
-          }).catch(() => null),
-          fetchDailyAdvice({
-            date: today,
-            token: accessToken,
-          }).catch(() => null),
-        ]);
+      const [deviceScreenTime, dashboard, advice] = await Promise.all([
+        getDeviceScreenTimeHours(),
+        fetchHomeDashboard({
+          date: today,
+          token: accessToken,
+        }).catch(() => null),
+        fetchDailyAdvice({
+          date: today,
+          token: accessToken,
+        }).catch(() => null),
+      ]);
 
-        if (!isMounted) return;
+      if (!isMountedRef.current) return;
 
-        setScreenTime(deviceScreenTime);
+      setScreenTime(deviceScreenTime);
 
-        if (dashboard) {
-          setUserName(dashboard?.user?.firstName || 'Иван');
+      if (dashboard) {
+        setUserName(dashboard?.user?.firstName || 'Иван');
 
-          setTasksDone(dashboard?.tasks?.done ?? 0);
-          setTasksTotal(dashboard?.tasks?.total ?? 0);
+        setTasksDone(dashboard?.tasks?.done ?? 0);
+        setTasksTotal(dashboard?.tasks?.total ?? 0);
 
-          setHabitsDone(dashboard?.habits?.done ?? 0);
-          setHabitsTotal(dashboard?.habits?.total ?? 0);
+        setHabitsDone(dashboard?.habits?.done ?? 0);
+        setHabitsTotal(dashboard?.habits?.total ?? 0);
 
-          setWeeklyStats({
-            missedDeadlines: dashboard?.weeklySummary?.missedDeadlines ?? 0,
-            completedTasks: dashboard?.weeklySummary?.completedTasks ?? 0,
-            averageBalance: dashboard?.weeklySummary?.averageBalance ?? 0,
-            averageScreenTime: dashboard?.weeklySummary?.averageScreenTime ?? 0,
+        setWeeklyStats({
+          missedDeadlines: dashboard?.weeklySummary?.missedDeadlines ?? 0,
+          completedTasks: dashboard?.weeklySummary?.completedTasks ?? 0,
+          averageBalance: dashboard?.weeklySummary?.averageBalance ?? 0,
+          averageScreenTime: dashboard?.weeklySummary?.averageScreenTime ?? 0,
+        });
+
+        if (Array.isArray(dashboard?.productivityChart) && dashboard.productivityChart.length > 0) {
+          const normalizedChart = getWeekDayOrder.map((day, index) => {
+            const found = dashboard.productivityChart.find(
+              (item) => item.day === day || item.dayIndex === index
+            );
+            return {
+              day,
+              value: found?.value ?? 0,
+            };
           });
-
-          if (Array.isArray(dashboard?.productivityChart) && dashboard.productivityChart.length > 0) {
-            const normalizedChart = getWeekDayOrder.map((day) => {
-              const found = dashboard.productivityChart.find((item) => item.day === day);
-              return {
-                day,
-                value: found?.value ?? 0,
-              };
-            });
-            setProductivityData(normalizedChart);
-          } else {
-            setProductivityData(createEmptyProductivityData());
-          }
-        }
-
-        if (advice) {
-          setDailyAdvice(advice?.text || 'Совет дня недоступен');
-          setAdviceProgress(advice?.progress ?? 0);
-          setAdviceLocked(advice?.locked ?? true);
-        } else if (dashboard?.advice) {
-          setDailyAdvice(dashboard.advice.text || 'Совет дня недоступен');
-          setAdviceProgress(dashboard.advice.progress ?? 0);
-          setAdviceLocked(dashboard.advice.locked ?? true);
+          setProductivityData(normalizedChart);
         } else {
-          setDailyAdvice('Совет дня недоступен');
-          setAdviceProgress(0);
-          setAdviceLocked(true);
-        }
-      } catch (error) {
-        console.log('Ошибка загрузки главного экрана:', error);
-        if (isMounted) {
-          Alert.alert('Ошибка', 'Не удалось загрузить данные главного экрана');
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
+          setProductivityData(createEmptyProductivityData());
         }
       }
-    };
 
-    loadHomeData();
+      if (advice) {
+        setDailyAdvice(advice?.text || 'Совет дня недоступен');
+        setAdviceProgress(advice?.progress ?? 0);
+        setAdviceLocked(advice?.locked ?? true);
+      } else if (dashboard?.advice) {
+        setDailyAdvice(dashboard.advice.text || 'Совет дня недоступен');
+        setAdviceProgress(dashboard.advice.progress ?? 0);
+        setAdviceLocked(dashboard.advice.locked ?? true);
+      } else {
+        setDailyAdvice('Совет дня недоступен');
+        setAdviceProgress(0);
+        setAdviceLocked(true);
+      }
+    } catch (error) {
+      console.log('Ошибка загрузки главного экрана:', error);
+      Alert.alert('Ошибка', 'Не удалось загрузить данные главного экрана');
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, [accessToken]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const isMountedRef = { current: true };
+      loadHomeData(isMountedRef);
+      return () => {
+        isMountedRef.current = false;
+      };
+    }, [loadHomeData])
+  );
 
   /**
    * Тестовые кнопки оставлены.
@@ -241,11 +249,12 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.greeting}>
-          {isLoading ? 'Добрый день!' : `Добрый день, ${userName}!`}
+          {isLoading && !greetingName
+            ? 'Добрый день!'
+            : `Добрый день, ${greetingName}!`}
         </Text>
 
         <View style={styles.progressWrapper}>

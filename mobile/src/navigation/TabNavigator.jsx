@@ -18,7 +18,7 @@ const Tab = createBottomTabNavigator();
 const ACTIVE_COLOR = '#F83603';
 const DEFAULT_COLOR = '#000000';
 
-export default function TabNavigator() {
+export default function TabNavigator({ accessToken, profile, isProfileLoading }) {
   return (
     <Tab.Navigator
       screenOptions={{
@@ -42,7 +42,6 @@ export default function TabNavigator() {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <HomeIcon
@@ -52,11 +51,19 @@ export default function TabNavigator() {
             />
           ),
         }}
-      />
-
+      >
+        {(props) => (
+          <HomeScreen
+            {...props}
+            accessToken={accessToken}
+            profile={profile}
+            isProfileLoading={isProfileLoading}
+          />
+        )}
+      </Tab.Screen>
+ 
       <Tab.Screen
         name="Habits"
-        component={HabitsScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <HabitsIcon
@@ -66,8 +73,10 @@ export default function TabNavigator() {
             />
           ),
         }}
-      />
-
+      >
+        {(props) => <HabitsScreen {...props} accessToken={accessToken} />}
+      </Tab.Screen>
+ 
       <Tab.Screen
         name="Focus"
         component={FocusScreen}
@@ -81,10 +90,9 @@ export default function TabNavigator() {
           ),
         }}
       />
-
+ 
       <Tab.Screen
         name="Calendar"
-        component={CalendarScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <CalendarIcon
@@ -94,11 +102,12 @@ export default function TabNavigator() {
             />
           ),
         }}
-      />
+      >
+        {(props) => <CalendarScreen {...props} accessToken={accessToken} />}
+      </Tab.Screen>
 
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <ProfileIcon
@@ -108,7 +117,15 @@ export default function TabNavigator() {
             />
           ),
         }}
-      />
+      >
+        {(props) => (
+          <ProfileScreen
+            {...props}
+            profile={profile}
+            isProfileLoading={isProfileLoading}
+          />
+        )}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 }

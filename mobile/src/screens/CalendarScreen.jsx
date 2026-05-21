@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,14 @@ import {
   Pressable,
   TextInput,
   Linking,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
+import { useFocusEffect } from '@react-navigation/native';
+
+import API_BASE_URL from '../api/config';
 
 LocaleConfig.locales.ru = {
   monthNames: [
@@ -69,6 +74,16 @@ function getShortMonth(date) {
   return SHORT_MONTHS[date.getMonth()];
 }
 
+function getMonthStart(date) {
+  const d = normalizeDate(date);
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function getMonthEnd(date) {
+  const d = normalizeDate(date);
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
 function getDaysLeft(deadlineDate, today) {
   const todayNorm = normalizeDate(today);
   const deadlineNorm = normalizeDate(deadlineDate);
@@ -107,50 +122,162 @@ function getDeadlineColor(deadlineDate, today) {
   return '#111111';
 }
 
-function buildMarkedDates(tasks, selectedDateKey, today) {
-  const active = getActiveTasks(tasks, today);
-  const result = {};
+function withToken(path, token) {
+  if (!token) return path;
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}wstoken=${encodeURIComponent(token)}`;
+}
 
-  active.forEach((task) => {
-    if (!result[task.deadline]) {
-      result[task.deadline] = { marked: true, dotColor: '#111111' };
-    }
+async function apiRequest(path, token, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${withToken(path, token)}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
   });
 
-  result[selectedDateKey] = {
-    ...(result[selectedDateKey] || {}),
-    selected: true,
-    selectedColor: '#F83603',
-    marked: result[selectedDateKey]?.marked ?? false,
-    dotColor: result[selectedDateKey]?.marked ? '#FFFFFF' : undefined,
+  if (response.status === 204) {
+    return null;
+  }
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(text || `HTTP ${response.status}`);
+  }
+
+  return text ? JSON.parse(text) : null;
+}
+
+async function fetchTasks(token, startDate, endDate) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+  const query = params.toString();
+  return apiRequest(`/tasks${query ? `?${query}` : ''}`, token, { method: 'GET' });
+}
+
+async function createTask(token, payload) {
+  return apiRequest('/tasks', token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+function normalizeTask(task) {
+  return {
+    id: String(task.id),
+    title: task.title,
+    type: task.task_type || 'Задача',
+    subject: task.subject || '',
+    deadline: task.deadline,
+    link: task.link || '',
+    isDone: Boolean(task.is_done),
   };
+}
+
+function mergeCustomStyles(existing, nextStyles) {
+  const prev = existing?.customStyles || {};
+  return {
+    ...existing,
+    customStyles: {
+      container: { ...(prev.container || {}), ...(nextStyles.container || {}) },
+      text: { ...(prev.text || {}), ...(nextStyles.text || {}) },
+    },
+  };
+}
+
+function buildMarkedDates(tasks, selectedDateKey, todayKey) {
+  const result = {};
+  const markColor = '#F83603';
+  const todayBg = '#FFF1EB';
+
+  tasks.forEach((task) => {
+    if (!task.deadline) return;
+    const existing = result[task.deadline];
+    result[task.deadline] = mergeCustomStyles(existing, {
+      container: {
+        borderColor: markColor,
+        borderWidth: 1,
+        borderRadius: 999,
+      },
+    });
+  });
+
+  if (todayKey) {
+    const existing = result[todayKey];
+    result[todayKey] = mergeCustomStyles(existing, {
+      container: {
+        backgroundColor: todayBg,
+        borderRadius: 999,
+      },
+      text: { color: '#F83603' },
+    });
+  }
+
+  if (selectedDateKey) {
+    const existing = result[selectedDateKey];
+    result[selectedDateKey] = mergeCustomStyles(existing, {
+      container: {
+        backgroundColor: markColor,
+        borderColor: markColor,
+        borderWidth: 1,
+        borderRadius: 999,
+      },
+      text: { color: '#FFFFFF' },
+    });
+  }
 
   return result;
 }
 
-function createTask(title, type, subject, deadline, link) {
-  return {
-    id: String(Date.now()),
-    title,
-    type,
-    subject: subject ?? '',
-    deadline,
-    link: link ?? '',
-  };
-}
-
-export default function CalendarScreen() {
+export default function CalendarScreen({ accessToken }) {
   const today = useMemo(() => normalizeDate(new Date()), []);
   const todayKey = useMemo(() => formatDateKey(today), [today]);
 
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [tasks, setTasks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(today);
   const [showModal, setShowModal] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskType, setNewTaskType] = useState('');
   const [newTaskSubject, setNewTaskSubject] = useState('');
   const [newTaskDate, setNewTaskDate] = useState(todayKey);
   const [newTaskLink, setNewTaskLink] = useState('');
+
+  const loadTasksForMonth = useCallback(
+    async (date) => {
+      if (!accessToken) {
+        setTasks([]);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsSyncing(true);
+      try {
+        const start = formatDateKey(getMonthStart(date));
+        const end = formatDateKey(getMonthEnd(date));
+        const data = await fetchTasks(accessToken, start, end);
+        const normalized = Array.isArray(data) ? data.map(normalizeTask) : [];
+        setTasks(normalized);
+      } catch (error) {
+        Alert.alert('Ошибка', 'Не удалось загрузить задачи календаря.');
+      } finally {
+        setIsLoading(false);
+        setIsSyncing(false);
+      }
+    },
+    [accessToken]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTasksForMonth(visibleMonth);
+      return () => {};
+    }, [loadTasksForMonth, visibleMonth])
+  );
 
   const activeTasks = useMemo(() => getActiveTasks(tasks, today), [tasks, today]);
   const tasksForDate = useMemo(
@@ -159,8 +286,8 @@ export default function CalendarScreen() {
   );
   const urgentTasks = useMemo(() => getUrgentTasks(tasks, today), [tasks, today]);
   const markedDates = useMemo(
-    () => buildMarkedDates(tasks, selectedDate, today),
-    [tasks, selectedDate, today]
+    () => buildMarkedDates(tasks, selectedDate, todayKey),
+    [tasks, selectedDate, todayKey]
   );
 
   const hasAnyActiveTasks = activeTasks.length > 0;
@@ -174,24 +301,44 @@ export default function CalendarScreen() {
     setShowModal(true);
   };
 
-  const handleSaveTask = () => {
+  const handleSaveTask = async () => {
     if (!newTaskTitle.trim() || !newTaskType.trim()) return;
     if (!isDateValid(newTaskDate)) return;
+    if (!accessToken) {
+      Alert.alert('Ошибка', 'Нет токена доступа. Перезайдите в аккаунт.');
+      return;
+    }
 
     const daysLeft = getDaysLeft(parseDateKey(newTaskDate), today);
     if (daysLeft < 0) return;
 
-    const task = createTask(
-      newTaskTitle.trim(),
-      newTaskType.trim(),
-      newTaskSubject.trim(),
-      newTaskDate,
-      newTaskLink.trim()
-    );
-
-    setTasks((prev) => [...prev, task]);
-    setShowModal(false);
+    try {
+      const payload = {
+        title: newTaskTitle.trim(),
+        task_type: newTaskType.trim(),
+        subject: newTaskSubject.trim() || null,
+        deadline: newTaskDate,
+        link: newTaskLink.trim() || null,
+      };
+      const created = await createTask(accessToken, payload);
+      if (created) {
+        setTasks((prev) => [...prev, normalizeTask(created)]);
+      }
+      setShowModal(false);
+    } catch (error) {
+      Alert.alert('Ошибка', 'Не удалось создать задачу.');
+    }
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color="#F83603" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
@@ -205,7 +352,11 @@ export default function CalendarScreen() {
         <Calendar
           current={selectedDate}
           markedDates={markedDates}
+          markingType="custom"
           onDayPress={(day) => setSelectedDate(day.dateString)}
+          onMonthChange={(month) => {
+            setVisibleMonth(new Date(month.year, month.month - 1, 1));
+          }}
           theme={{
             backgroundColor: '#FFFFFF',
             calendarBackground: '#FFFFFF',
@@ -249,7 +400,10 @@ export default function CalendarScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitle}>Ближайшие дедлайны</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Ближайшие дедлайны</Text>
+          {isSyncing && <Text style={styles.syncText}>Синхронизация...</Text>}
+        </View>
         <View style={styles.cardsBlock}>
           {urgentTasks.length > 0 ? (
             urgentTasks.map((task) => (
@@ -411,6 +565,11 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 24,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
   topTitle: {
     fontFamily: 'WixMadeforDisplayBold',
@@ -440,6 +599,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111111',
     marginBottom: 16,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  syncText: {
+    fontSize: 12,
+    color: '#9A9A9A',
+    fontFamily: 'WixMadeforDisplayMedium',
   },
 
   cardsBlock: {
