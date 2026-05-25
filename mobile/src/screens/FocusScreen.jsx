@@ -6,9 +6,9 @@ import {
     TouchableOpacity,
     Modal,
     Pressable,
-    TextInput,
-    SafeAreaView
+    TextInput
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Repeat from '../../assets/images/focusIcons/Repeat.svg';
 import Settings from '../../assets/images/focusIcons/Settings.svg';
 

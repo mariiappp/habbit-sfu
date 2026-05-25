@@ -6,12 +6,13 @@ from datetime import date, timedelta
 
 from app.clients.exceptions import MoodleAPIError
 from app.clients.moodle import MoodleClient
-from app.domain.models.habits import Habit
+from app.domain.models.habits import Habit, HabitRecurrence
 from app.domain.models.habit_completions import HabitCompletion
 from app.domain.models.users import User
 from app.repositories.habits import HabitRepository
 from app.repositories.habit_completions import HabitCompletionRepository
 from app.repositories.users import UserRepository
+from app.repositories.user_streaks import UserStreakRepository
 
 
 class HabitNotFoundError(Exception):
@@ -53,11 +54,13 @@ class HabitService:
         users: UserRepository,
         habits: HabitRepository,
         completions: HabitCompletionRepository,
+        streaks: UserStreakRepository,
         moodle: MoodleClient,
     ) -> None:
         self.users = users
         self.habits = habits
         self.completions = completions
+        self.streaks = streaks
         self.moodle = moodle
 
     async def _resolve_user(self, token: str) -> User:
@@ -146,6 +149,168 @@ class HabitService:
         )
         if not deleted:
             raise CompletionNotFoundError("Completion not found")
+
+    @staticmethod
+    def _week_bounds(target_date: date) -> tuple[date, date]:
+        start = target_date - timedelta(days=target_date.weekday())
+        end = start + timedelta(days=6)
+        return start, end
+
+    @staticmethod
+    def _month_bounds(target_date: date) -> tuple[date, date]:
+        start = date(target_date.year, target_date.month, 1)
+        if target_date.month == 12:
+            end = date(target_date.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end = date(target_date.year, target_date.month + 1, 1) - timedelta(days=1)
+        return start, end
+
+    @staticmethod
+    def _is_active(habit: Habit, target_date: date) -> bool:
+        if habit.created_at is None:
+            return True
+        return habit.created_at.date() <= target_date
+
+    @staticmethod
+    def _has_completion(
+        completion_dates: set[date],
+        start_date: date,
+        end_date: date,
+    ) -> bool:
+        current = start_date
+        while current <= end_date:
+            if current in completion_dates:
+                return True
+            current += timedelta(days=1)
+        return False
+
+    def _is_habit_satisfied(
+        self,
+        habit: Habit,
+        target_date: date,
+        completion_dates: set[date],
+    ) -> bool:
+        if not self._is_active(habit, target_date):
+            return True
+
+        if habit.recurrence == HabitRecurrence.DAILY:
+            return target_date in completion_dates
+        if habit.recurrence == HabitRecurrence.WEEKLY:
+            week_start, week_end = self._week_bounds(target_date)
+            created_date = habit.created_at.date() if habit.created_at else week_start
+            active_start = max(week_start, created_date)
+            return self._has_completion(completion_dates, active_start, week_end)
+        if habit.recurrence == HabitRecurrence.MONTHLY:
+            month_start, month_end = self._month_bounds(target_date)
+            created_date = habit.created_at.date() if habit.created_at else month_start
+            active_start = max(month_start, created_date)
+            return self._has_completion(completion_dates, active_start, month_end)
+        return target_date in completion_dates
+
+    async def get_streak(self, token: str) -> dict:
+        user = await self._resolve_user(token)
+        habits = await self.habits.get_all_by_user(user.id)
+        today = date.today()
+        current_week_start, current_week_end = self._week_bounds(today)
+        current_month_start, current_month_end = self._month_bounds(today)
+
+        if not habits:
+            record = await self.streaks.upsert(user.id, 0, None)
+            return {
+                "current_streak": record.current_streak,
+                "last_streak_date": record.last_streak_date,
+            }
+
+        created_dates = [habit.created_at.date() for habit in habits if habit.created_at]
+        earliest = min(created_dates) if created_dates else today
+
+        completions = await self.completions.get_user_completions_in_range(
+            user_id=user.id,
+            start_date=earliest,
+            end_date=today,
+        )
+
+        completions_by_habit: dict[int, set[date]] = {habit.id: set() for habit in habits}
+        for completion in completions:
+            if completion.habit_id in completions_by_habit:
+                completions_by_habit[completion.habit_id].add(completion.completed_at.date())
+
+        def is_satisfied(day: date) -> bool:
+            return all(
+                self._is_habit_satisfied_for_streak(
+                    habit,
+                    day,
+                    completions_by_habit.get(habit.id, set()),
+                    today,
+                    current_week_start,
+                    current_week_end,
+                    current_month_start,
+                    current_month_end,
+                )
+                for habit in habits
+            )
+
+        is_today_satisfied = is_satisfied(today)
+        start_day = today if is_today_satisfied else today - timedelta(days=1)
+
+        if start_day < earliest:
+            record = await self.streaks.upsert(user.id, 0, None)
+            return {
+                "current_streak": record.current_streak,
+                "last_streak_date": record.last_streak_date,
+            }
+
+        streak = 0
+        cursor = start_day
+        while cursor >= earliest:
+            if not is_satisfied(cursor):
+                break
+            streak += 1
+            cursor -= timedelta(days=1)
+
+        last_date = start_day if streak > 0 else None
+        record = await self.streaks.upsert(user.id, streak, last_date)
+        return {
+            "current_streak": record.current_streak,
+            "last_streak_date": record.last_streak_date,
+        }
+
+    def _is_habit_satisfied_for_streak(
+        self,
+        habit: Habit,
+        target_date: date,
+        completion_dates: set[date],
+        today: date,
+        current_week_start: date,
+        current_week_end: date,
+        current_month_start: date,
+        current_month_end: date,
+    ) -> bool:
+        if not self._is_active(habit, target_date):
+            return True
+
+        if habit.recurrence == HabitRecurrence.DAILY:
+            return target_date in completion_dates
+
+        if habit.recurrence == HabitRecurrence.WEEKLY:
+            week_start, week_end = self._week_bounds(target_date)
+            if week_start <= today <= week_end:
+                # Current week: allow pending weekly habits.
+                return True
+            created_date = habit.created_at.date() if habit.created_at else week_start
+            active_start = max(week_start, created_date)
+            return self._has_completion(completion_dates, active_start, week_end)
+
+        if habit.recurrence == HabitRecurrence.MONTHLY:
+            month_start, month_end = self._month_bounds(target_date)
+            if current_month_start <= today <= current_month_end and month_start == current_month_start:
+                # Current month: allow pending monthly habits.
+                return True
+            created_date = habit.created_at.date() if habit.created_at else month_start
+            active_start = max(month_start, created_date)
+            return self._has_completion(completion_dates, active_start, month_end)
+
+        return target_date in completion_dates
 
     async def history(
         self,

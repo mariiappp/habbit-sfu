@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
   Alert,
+  Modal,
+  Pressable,
+  TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Svg, {
   Circle,
@@ -23,6 +26,7 @@ import ScreenTime from '../../assets/images/homeScreenIcons/ScreenTime.svg';
 import Tasks from '../../assets/images/homeScreenIcons/Tasks.svg';
 import API_BASE_URL from '../api/config';
 import { getScreenTimeSeconds } from '../storage/screenTimeStorage';
+import { getScreenLimitHours, setScreenLimitHours } from '../storage/screenLimitStorage';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -44,21 +48,34 @@ const calculateBalance = ({
   screenTimeHours,
   screenLimitHours,
 }) => {
-  const safeTasksTotal = tasksTotal > 0 ? tasksTotal : 1;
-  const safeHabitsTotal = habitsTotal > 0 ? habitsTotal : 1;
   const safeScreenLimit = screenLimitHours > 0 ? screenLimitHours : 1;
 
-  const tasksProgress = clamp(tasksDone / safeTasksTotal, 0, 1);
-  const habitsProgress = clamp(habitsDone / safeHabitsTotal, 0, 1);
+  const tasksProgress = tasksTotal > 0
+    ? clamp(tasksDone / tasksTotal, 0, 1)
+    : 1;
+  const habitsProgress = habitsTotal > 0
+    ? clamp(habitsDone / habitsTotal, 0, 1)
+    : 1;
   const screenTimeScore = clamp(1 - screenTimeHours / safeScreenLimit, 0, 1);
 
-  return Math.round(((tasksProgress + habitsProgress + screenTimeScore) / 3) * 100);
+  const allCompleted =
+    (tasksTotal === 0 || tasksDone >= tasksTotal) &&
+    (habitsTotal === 0 || habitsDone >= habitsTotal) &&
+    screenTimeHours <= safeScreenLimit;
+
+  if (allCompleted) {
+    return 100;
+  }
+
+  const rawScore = ((tasksProgress + habitsProgress + screenTimeScore) / 3) * 100;
+  return Math.max(0, Math.min(100, Math.floor(rawScore)));
 };
 
 async function getDeviceScreenTimeHours() {
   try {
     const seconds = await getScreenTimeSeconds();
-    return Math.round((seconds / 3600) * 10) / 10;
+    const hours = Math.round((seconds / 3600) * 10) / 10;
+    return Math.min(24, Math.max(0, hours));
   } catch (error) {
     console.log('Не удалось получить экранное время устройства:', error);
     return 0;
@@ -109,7 +126,9 @@ export default function HomeScreen({ accessToken, profile }) {
   const [habitsTotal, setHabitsTotal] = useState(0);
 
   const [screenTime, setScreenTime] = useState(0);
-  const [screenLimit] = useState(4);
+  const [screenLimit, setScreenLimit] = useState(4);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [limitInput, setLimitInput] = useState('4');
 
   const [dailyAdvice, setDailyAdvice] = useState('Совет дня недоступен');
   const [adviceProgress, setAdviceProgress] = useState(0);
@@ -123,6 +142,21 @@ export default function HomeScreen({ accessToken, profile }) {
   });
 
   const [productivityData, setProductivityData] = useState(createEmptyProductivityData());
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadLimit = async () => {
+      const storedLimit = await getScreenLimitHours();
+      if (isMounted) {
+        setScreenLimit(storedLimit);
+        setLimitInput(String(storedLimit));
+      }
+    };
+    loadLimit();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const balance = useMemo(() => {
     return calculateBalance({
@@ -238,6 +272,22 @@ export default function HomeScreen({ accessToken, profile }) {
     }, [loadHomeData])
   );
 
+  const handleOpenLimitModal = () => {
+    setLimitInput(String(screenLimit));
+    setShowLimitModal(true);
+  };
+
+  const handleSaveLimit = async () => {
+    const parsed = Number(limitInput.replace(',', '.'));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      Alert.alert('Ошибка', 'Введите корректное число часов.');
+      return;
+    }
+    const saved = await setScreenLimitHours(parsed);
+    setScreenLimit(saved);
+    setShowLimitModal(false);
+  };
+
   /**
    * Тестовые кнопки оставлены.
    * Они теперь изменяют только локальное состояние для отладки UI.
@@ -280,6 +330,7 @@ export default function HomeScreen({ accessToken, profile }) {
             value={`${screenTime}/${screenLimit} ч`}
             iconBg="#E3E8FF"
             isLast
+            onPress={handleOpenLimitModal}
           />
         </View>
 
@@ -323,6 +374,38 @@ export default function HomeScreen({ accessToken, profile }) {
         <Text style={styles.sectionTitle}>Продуктивность</Text>
         <ProductivityChart data={productivityData} />
       </ScrollView>
+
+      <Modal
+        visible={showLimitModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLimitModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowLimitModal(false)}
+        >
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Лимит экранного времени</Text>
+            <Text style={styles.modalSubtitle}>Часы в день</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={limitInput}
+              onChangeText={setLimitInput}
+              keyboardType="decimal-pad"
+              placeholder="Например, 4"
+              placeholderTextColor="#9A9A9A"
+            />
+            <TouchableOpacity
+              style={styles.modalSaveButton}
+              activeOpacity={0.9}
+              onPress={handleSaveLimit}
+            >
+              <Text style={styles.modalSaveText}>Сохранить</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -377,15 +460,21 @@ function CircularBalance({ value }) {
   );
 }
 
-function MetricRow({ Icon, label, value, iconBg, isLast = false }) {
+function MetricRow({ Icon, label, value, iconBg, isLast = false, onPress }) {
+  const Container = onPress ? TouchableOpacity : View;
+
   return (
-    <View style={[styles.metricRow, isLast && styles.metricRowLast]}>
+    <Container
+      style={[styles.metricRow, isLast && styles.metricRowLast]}
+      activeOpacity={onPress ? 0.85 : 1}
+      onPress={onPress}
+    >
       <View style={[styles.metricIconWrapper, { backgroundColor: iconBg }]}>
         <Icon width={25} height={25} />
       </View>
       <Text style={styles.metricLabel}>{label}</Text>
       <Text style={styles.metricValue}>{value}</Text>
-    </View>
+    </Container>
   );
 }
 
@@ -549,6 +638,53 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1F1F1F',
     fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.24)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+  },
+  modalTitle: {
+    fontFamily: 'WixMadeforDisplayBold',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111111',
+    marginBottom: 6,
+  },
+  modalSubtitle: {
+    fontFamily: 'WixMadeforDisplayMedium',
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 14,
+  },
+  modalInput: {
+    fontFamily: 'WixMadeforDisplayMedium',
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#F2F7FB',
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#111111',
+    marginBottom: 16,
+  },
+  modalSaveButton: {
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: '#F83603',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSaveText: {
+    fontFamily: 'WixMadeforDisplayBold',
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
 
   adviceCard: {

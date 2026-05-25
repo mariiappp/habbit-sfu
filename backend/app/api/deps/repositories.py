@@ -9,6 +9,7 @@ from app.repositories.habits import HabitRepository
 from app.repositories.habit_completions import HabitCompletionRepository
 from app.repositories.daily_advice import DailyAdviceRepository
 from app.repositories.tasks import TaskRepository
+from app.repositories.user_streaks import UserStreakRepository
 
 
 def get_user_repo(db: DbSessionDep) -> UserRepository:
@@ -44,3 +45,11 @@ def get_task_repo(db: DbSessionDep) -> TaskRepository:
 
 
 TaskRepoDep = Annotated[TaskRepository, Depends(get_task_repo)]
+
+
+def get_user_streak_repo(db: DbSessionDep) -> UserStreakRepository:
+    """Injects UserStreakRepository bound to current request session."""
+    return UserStreakRepository(session=db)
+
+
+UserStreakRepoDep = Annotated[UserStreakRepository, Depends(get_user_streak_repo)]

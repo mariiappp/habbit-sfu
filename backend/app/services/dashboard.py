@@ -153,28 +153,57 @@ class DashboardService:
         )
         tasks_total = len(tasks_today)
         tasks_done = len([task for task in tasks_today if task.is_done])
-        missed_deadlines = len(
-            await self.tasks.get_before_date(
-                user_id=user.id,
-                before_date=target_date,
-                include_done=False,
-            )
+
+        tasks_in_week = await self.tasks.get_by_user_date_range(
+            user_id=user.id,
+            start_date=week_start,
+            end_date=week_end,
         )
-        tasks_progress = tasks_done / max(tasks_total, 1)
-        habits_progress = habits_done / max(habits_total, 1)
-        average_balance = round(((tasks_progress + habits_progress) / 2) * 100)
+        tasks_by_date: dict[date, list] = {}
+        for task in tasks_in_week:
+            tasks_by_date.setdefault(task.deadline, []).append(task)
+
+        missed_deadlines = len(
+            [
+                task
+                for task in tasks_in_week
+                if task.deadline < target_date and not task.is_done
+            ]
+        )
 
         productivity_chart = []
+        day_balances: list[int] = []
+        completed_tasks_week = 0
         labels = self._day_labels()
         for index, day_label in enumerate(labels):
             current_day = week_start + timedelta(days=index)
-            completed = len(completions_by_date.get(current_day, set()))
-            value = round((completed / habits_total) * 100) if habits_total else 0
+            tasks_for_day = tasks_by_date.get(current_day, [])
+            tasks_total_day = len(tasks_for_day)
+            tasks_done_day = len([task for task in tasks_for_day if task.is_done])
+            completed_tasks_week += tasks_done_day
+
+            habits_active_day = sum(
+                1 for habit in habits if self._is_active(habit, current_day)
+            )
+            habits_done_day = len(completions_by_date.get(current_day, set()))
+
+            components = []
+            if habits_active_day > 0:
+                components.append(habits_done_day / habits_active_day)
+            if tasks_total_day > 0:
+                components.append(tasks_done_day / tasks_total_day)
+
+            day_balance = round((sum(components) / len(components)) * 100) if components else 0
+            if current_day <= target_date:
+                day_balances.append(day_balance)
+
             productivity_chart.append({
                 "day": day_label,
-                "value": value,
+                "value": day_balance,
                 "dayIndex": index,
             })
+
+        average_balance = round(sum(day_balances) / len(day_balances)) if day_balances else 0
 
         return {
             "user": {
@@ -191,7 +220,7 @@ class DashboardService:
             },
             "weeklySummary": {
                 "missedDeadlines": missed_deadlines,
-                "completedTasks": tasks_done,
+                "completedTasks": completed_tasks_week,
                 "averageBalance": average_balance,
                 "averageScreenTime": 0,
             },

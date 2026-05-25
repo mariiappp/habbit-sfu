@@ -9,6 +9,7 @@ from app.api.deps.repositories import (
     HabitCompletionRepoDep,
     DailyAdviceRepoDep,
     TaskRepoDep,
+    UserStreakRepoDep,
 )
 from app.clients.moodle import MoodleClient
 from app.core.config import settings
@@ -43,6 +44,7 @@ def get_habit_service(
     users: UserRepoDep,
     habits: HabitRepoDep,
     completions: HabitCompletionRepoDep,
+    streaks: UserStreakRepoDep,
     moodle: MoodleClientDep,
 ) -> HabitService:
     """Assembles HabitService with injected repos and Moodle client."""
@@ -50,6 +52,7 @@ def get_habit_service(
         users=users,
         habits=habits,
         completions=completions,
+        streaks=streaks,
         moodle=moodle,
     )
 

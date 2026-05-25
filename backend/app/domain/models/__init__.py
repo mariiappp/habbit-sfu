@@ -36,6 +36,7 @@ from app.domain.models.habits import Habit, HabitRecurrence
 from app.domain.models.habit_completions import HabitCompletion
 from app.domain.models.daily_advice import DailyAdvice
 from app.domain.models.tasks import Task
+from app.domain.models.user_streaks import UserStreak
 
 __all__ = [
     "Base",
@@ -45,4 +46,5 @@ __all__ = [
     "HabitCompletion",
     "DailyAdvice",
     "Task",
+    "UserStreak",
 ]

@@ -8,10 +8,10 @@ import {
   Modal,
   Pressable,
   TextInput,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import FireIcon from '../../assets/images/Fire.svg';
 import API_BASE_URL from '../api/config';
 import { getHabitsCache, setHabitsCache } from '../storage/habitsStorage';
@@ -140,6 +140,45 @@ function isHabitSatisfiedForDate(habit, date, completionSet) {
   }
 }
 
+function isHabitSatisfiedForStreak(
+  habit,
+  date,
+  completionSet,
+  today,
+  currentWeekStart,
+  currentWeekEnd,
+  currentMonthStart,
+  currentMonthEnd
+) {
+  if (!isHabitActiveOnDate(habit, date)) return true;
+  const dateKey = toDateKey(date);
+
+  switch (habit.recurrence) {
+    case 'daily':
+      return completionSet?.has(dateKey) ?? false;
+    case 'weekly': {
+      if (date >= currentWeekStart && date <= currentWeekEnd) {
+        return true;
+      }
+      const start = getWeekStart(date);
+      const end = getWeekEnd(date);
+      const activeStart = normalizeDate(habit.created_at) > start ? normalizeDate(habit.created_at) : start;
+      return hasCompletionInRange(completionSet, activeStart, end);
+    }
+    case 'monthly': {
+      if (date >= currentMonthStart && date <= currentMonthEnd) {
+        return true;
+      }
+      const start = getMonthStart(date);
+      const end = getMonthEnd(date);
+      const activeStart = normalizeDate(habit.created_at) > start ? normalizeDate(habit.created_at) : start;
+      return hasCompletionInRange(completionSet, activeStart, end);
+    }
+    default:
+      return completionSet?.has(dateKey) ?? false;
+  }
+}
+
 function withToken(path, token) {
   if (!token) return path;
   const separator = path.includes('?') ? '&' : '?';
@@ -197,6 +236,23 @@ async function deleteCompletion(token, habitId, completionId) {
   });
 }
 
+async function updateHabit(token, habitId, payload) {
+  return apiRequest(`/habits/${habitId}`, token, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function deleteHabit(token, habitId) {
+  return apiRequest(`/habits/${habitId}`, token, {
+    method: 'DELETE',
+  });
+}
+
+async function fetchStreak(token) {
+  return apiRequest('/habits/streak', token, { method: 'GET' });
+}
+
 function buildCompletionIndex(completions) {
   const idByDate = {};
   const dates = [];
@@ -222,11 +278,18 @@ export default function HabitsScreen({ accessToken }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingHabitIds, setPendingHabitIds] = useState({});
+  const [serverStreak, setServerStreak] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingHabit, setEditingHabit] = useState(null);
   const [newHabitTitle, setNewHabitTitle] = useState('');
   const [selectedRepeat, setSelectedRepeat] = useState(REPEAT_OPTIONS[0]);
   const [isSaving, setIsSaving] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editRepeat, setEditRepeat] = useState(REPEAT_OPTIONS[0]);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const todayDate = useMemo(() => normalizeDate(new Date()), []);
   const todayKey = useMemo(() => toDateKey(todayDate), [todayDate]);
@@ -272,10 +335,12 @@ export default function HabitsScreen({ accessToken }) {
           })
         );
         const nextCompletions = Object.fromEntries(completionEntries);
+        const streakPayload = await fetchStreak(accessToken).catch(() => null);
 
         if (!isMounted) return;
         setHabits(remoteHabits);
         setCompletionsByHabit(nextCompletions);
+        setServerStreak(streakPayload?.current_streak ?? null);
       } catch (error) {
         console.warn('Failed to sync habits:', error);
         if (isMounted) {
@@ -312,15 +377,20 @@ export default function HabitsScreen({ accessToken }) {
     return sets;
   }, [completionsByHabit]);
 
-  const streakDays = useMemo(() => {
+  const localStreakDays = useMemo(() => {
     if (!habits.length) return 0;
-    let streak = 0;
-    let cursor = normalizeDate(todayDate);
     const earliest = habits.reduce((minDate, habit) => {
       if (!habit?.created_at) return minDate;
       const created = normalizeDate(habit.created_at);
       return created < minDate ? created : minDate;
-    }, cursor);
+    }, todayDate);
+
+    const isTodaySatisfied = habits.every((habit) =>
+      isHabitSatisfiedForDate(habit, todayDate, completionSets[habit.id])
+    );
+
+    let cursor = isTodaySatisfied ? todayDate : addDays(todayDate, -1);
+    let streak = 0;
 
     while (cursor >= earliest) {
       const allSatisfied = habits.every((habit) =>
@@ -332,7 +402,9 @@ export default function HabitsScreen({ accessToken }) {
     }
 
     return streak;
-  }, [habits, completionSets]);
+  }, [habits, completionSets, todayDate]);
+
+  const streakDays = serverStreak ?? localStreakDays;
 
   const completedTodayCount = useMemo(
     () => habits.filter((habit) =>
@@ -341,10 +413,23 @@ export default function HabitsScreen({ accessToken }) {
     [habits, completionSets, todayDate]
   );
 
+  const refreshStreak = async () => {
+    if (!accessToken) return;
+    const streakPayload = await fetchStreak(accessToken).catch(() => null);
+    setServerStreak(streakPayload?.current_streak ?? null);
+  };
+
   const handleOpenAddHabit = () => {
     setNewHabitTitle('');
     setSelectedRepeat(REPEAT_OPTIONS[0]);
     setShowModal(true);
+  };
+
+  const handleOpenEditHabit = (habit) => {
+    setEditingHabit(habit);
+    setEditTitle(habit.title || '');
+    setEditRepeat(RECURRENCE_LABELS[habit.recurrence] || REPEAT_OPTIONS[0]);
+    setShowEditModal(true);
   };
 
   const handleSaveHabit = async () => {
@@ -372,6 +457,51 @@ export default function HabitsScreen({ accessToken }) {
       Alert.alert('Ошибка', 'Не удалось создать привычку.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleUpdateHabit = async () => {
+    if (!editingHabit || !editTitle.trim() || isUpdating) return;
+    if (!accessToken) {
+      Alert.alert('Ошибка', 'Нет токена доступа. Перезайдите в аккаунт.');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const payload = {
+        title: editTitle.trim(),
+        recurrence: RECURRENCE_MAP[editRepeat] || editingHabit.recurrence,
+      };
+      const updated = await updateHabit(accessToken, editingHabit.id, payload);
+      setHabits((prev) =>
+        prev.map((habit) => (habit.id === updated.id ? updated : habit))
+      );
+      setShowEditModal(false);
+    } catch (error) {
+      Alert.alert('Ошибка', 'Не удалось обновить привычку.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteHabit = async () => {
+    if (!editingHabit || !accessToken || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await deleteHabit(accessToken, editingHabit.id);
+      setHabits((prev) => prev.filter((habit) => habit.id !== editingHabit.id));
+      setCompletionsByHabit((prev) => {
+        const next = { ...prev };
+        delete next[editingHabit.id];
+        return next;
+      });
+      await refreshStreak();
+      setShowEditModal(false);
+    } catch (error) {
+      Alert.alert('Ошибка', 'Не удалось удалить привычку.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -409,6 +539,7 @@ export default function HabitsScreen({ accessToken }) {
     try {
       if (todayCompletionId) {
         await deleteCompletion(accessToken, habitId, todayCompletionId);
+        await refreshStreak();
         return;
       }
 
@@ -433,6 +564,7 @@ export default function HabitsScreen({ accessToken }) {
           [habitId]: { dates: Array.from(updatedDates), idByDate: updatedIds },
         };
       });
+      await refreshStreak();
     } catch (error) {
       setCompletionsByHabit((prev) => ({
         ...prev,
@@ -494,7 +626,8 @@ export default function HabitsScreen({ accessToken }) {
               title={habit.title}
               subtitle={getHabitSubtitle(habit)}
               completed={isHabitSatisfiedForDate(habit, todayDate, completionSets[habit.id])}
-              onPress={() => toggleHabit(habit.id)}
+              onToggle={() => toggleHabit(habit.id)}
+              onOpen={() => handleOpenEditHabit(habit)}
             />
           ))}
 
@@ -583,21 +716,107 @@ export default function HabitsScreen({ accessToken }) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={showEditModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowEditModal(false)}
+        >
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Привычка</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Название привычки"
+              placeholderTextColor="#9A9A9A"
+              value={editTitle}
+              onChangeText={setEditTitle}
+              returnKeyType="done"
+            />
+
+            <Text style={styles.repeatTitle}>Регулярность</Text>
+
+            <View style={styles.repeatList}>
+              {REPEAT_OPTIONS.map((option) => {
+                const selected = editRepeat === option;
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.repeatOption,
+                      selected && styles.repeatOptionSelected,
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() => setEditRepeat(option)}
+                  >
+                    <Text
+                      style={[
+                        styles.repeatOptionText,
+                        selected && styles.repeatOptionTextSelected,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.saveButton,
+                (!editTitle.trim() || isUpdating) && styles.saveButtonDisabled,
+              ]}
+              activeOpacity={0.9}
+              onPress={handleUpdateHabit}
+              disabled={isUpdating}
+            >
+              {isUpdating ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>Сохранить</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteButton}
+              activeOpacity={0.9}
+              onPress={handleDeleteHabit}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <ActivityIndicator color="#F83603" />
+              ) : (
+                <Text style={styles.deleteButtonText}>Удалить</Text>
+              )}
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-function HabitCard({ title, subtitle, completed, onPress }) {
+function HabitCard({ title, subtitle, completed, onToggle, onOpen }) {
   return (
     <View style={styles.habitCard}>
-      <View style={styles.habitTextBlock}>
+      <TouchableOpacity
+        style={styles.habitTextBlock}
+        activeOpacity={0.85}
+        onPress={onOpen}
+      >
         <Text style={styles.habitTitle}>{title}</Text>
         <Text style={styles.habitSubtitle}>{subtitle}</Text>
-      </View>
+      </TouchableOpacity>
       <TouchableOpacity
         style={[styles.checkCircle, completed && styles.checkCircleCompleted]}
         activeOpacity={0.8}
-        onPress={onPress}
+        onPress={onToggle}
       />
     </View>
   );
@@ -822,6 +1041,21 @@ const styles = StyleSheet.create({
     fontFamily: 'WixMadeforDisplayBold',
     color: '#FFFFFF',
     fontSize: 17,
+    fontWeight: '700',
+  },
+  deleteButton: {
+    marginTop: 12,
+    height: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#F83603',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    fontFamily: 'WixMadeforDisplayBold',
+    color: '#F83603',
+    fontSize: 16,
     fontWeight: '700',
   },
 });

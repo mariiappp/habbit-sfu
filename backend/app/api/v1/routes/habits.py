@@ -15,6 +15,7 @@ from app.domain.schemas.habits import (
     HabitHistoryDay,
     HabitHistoryResponse,
 )
+from app.domain.schemas.streaks import StreakResponse
 from app.services.habits import (
     HabitNotFoundError,
     CompletionNotFoundError,
@@ -120,6 +121,25 @@ async def list_habits(
     try:
         records = await service.list_habits(token=token)
         return [HabitResponse.model_validate(habit) for habit in records]
+    except MoodleAPIError as exc:
+        raise_moodle_error(exc)
+    except Exception as exc:
+        raise_domain_error(exc)
+
+
+@router.get(
+    "/habits/streak",
+    response_model=StreakResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_streak(
+    token: MoodleTokenDep,
+    service: HabitServiceDep,
+) -> StreakResponse:
+    """Return current streak for the user."""
+    try:
+        payload = await service.get_streak(token=token)
+        return StreakResponse(**payload)
     except MoodleAPIError as exc:
         raise_moodle_error(exc)
     except Exception as exc:

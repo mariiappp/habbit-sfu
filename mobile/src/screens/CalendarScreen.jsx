@@ -100,10 +100,8 @@ function getActiveTasks(tasks, today) {
   return tasks.filter((task) => !isTaskExpired(task, today));
 }
 
-function getTasksForDate(tasks, selectedDateKey, today) {
-  return getActiveTasks(tasks, today).filter(
-    (task) => task.deadline === selectedDateKey
-  );
+function getTasksForDate(tasks, selectedDateKey) {
+  return tasks.filter((task) => task.deadline === selectedDateKey);
 }
 
 function getUrgentTasks(tasks, today) {
@@ -161,6 +159,19 @@ async function createTask(token, payload) {
   return apiRequest('/tasks', token, {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+async function updateTask(token, taskId, payload) {
+  return apiRequest(`/tasks/${taskId}`, token, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function deleteTask(token, taskId) {
+  return apiRequest(`/tasks/${taskId}`, token, {
+    method: 'DELETE',
   });
 }
 
@@ -240,7 +251,9 @@ export default function CalendarScreen({ accessToken }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(today);
+  const [pendingTaskIds, setPendingTaskIds] = useState({});
   const [showModal, setShowModal] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskType, setNewTaskType] = useState('');
   const [newTaskSubject, setNewTaskSubject] = useState('');
@@ -281,8 +294,8 @@ export default function CalendarScreen({ accessToken }) {
 
   const activeTasks = useMemo(() => getActiveTasks(tasks, today), [tasks, today]);
   const tasksForDate = useMemo(
-    () => getTasksForDate(tasks, selectedDate, today),
-    [tasks, selectedDate, today]
+    () => getTasksForDate(tasks, selectedDate),
+    [tasks, selectedDate]
   );
   const urgentTasks = useMemo(() => getUrgentTasks(tasks, today), [tasks, today]);
   const markedDates = useMemo(
@@ -293,11 +306,22 @@ export default function CalendarScreen({ accessToken }) {
   const hasAnyActiveTasks = activeTasks.length > 0;
 
   const handleOpenModal = () => {
+    setEditingTask(null);
     setNewTaskTitle('');
     setNewTaskType('');
     setNewTaskSubject('');
     setNewTaskDate(selectedDate);
     setNewTaskLink('');
+    setShowModal(true);
+  };
+
+  const handleOpenEditModal = (task) => {
+    setEditingTask(task);
+    setNewTaskTitle(task.title || '');
+    setNewTaskType(task.type || '');
+    setNewTaskSubject(task.subject || '');
+    setNewTaskDate(task.deadline || selectedDate);
+    setNewTaskLink(task.link || '');
     setShowModal(true);
   };
 
@@ -309,8 +333,13 @@ export default function CalendarScreen({ accessToken }) {
       return;
     }
 
-    const daysLeft = getDaysLeft(parseDateKey(newTaskDate), today);
-    if (daysLeft < 0) return;
+    if (!editingTask) {
+      const daysLeft = getDaysLeft(parseDateKey(newTaskDate), today);
+      if (daysLeft < 0) {
+        Alert.alert('Ошибка', 'Нельзя добавлять задачи на прошедшую дату.');
+        return;
+      }
+    }
 
     try {
       const payload = {
@@ -320,13 +349,72 @@ export default function CalendarScreen({ accessToken }) {
         deadline: newTaskDate,
         link: newTaskLink.trim() || null,
       };
-      const created = await createTask(accessToken, payload);
-      if (created) {
-        setTasks((prev) => [...prev, normalizeTask(created)]);
+      if (editingTask) {
+        const updated = await updateTask(accessToken, editingTask.id, payload);
+        if (updated) {
+          const normalized = normalizeTask(updated);
+          setTasks((prev) =>
+            prev.map((task) => (task.id === normalized.id ? normalized : task))
+          );
+        }
+      } else {
+        const created = await createTask(accessToken, payload);
+        if (created) {
+          setTasks((prev) => [...prev, normalizeTask(created)]);
+        }
       }
       setShowModal(false);
     } catch (error) {
-      Alert.alert('Ошибка', 'Не удалось создать задачу.');
+      Alert.alert('Ошибка', editingTask ? 'Не удалось обновить задачу.' : 'Не удалось создать задачу.');
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!editingTask || !accessToken) return;
+    try {
+      await deleteTask(accessToken, editingTask.id);
+      setTasks((prev) => prev.filter((task) => task.id !== String(editingTask.id)));
+      setShowModal(false);
+    } catch (error) {
+      Alert.alert('Ошибка', 'Не удалось удалить задачу.');
+    }
+  };
+
+  const toggleTaskDone = async (taskId) => {
+    if (!accessToken) {
+      Alert.alert('Ошибка', 'Нет токена доступа. Перезайдите в аккаунт.');
+      return;
+    }
+    if (pendingTaskIds[taskId]) return;
+
+    const existing = tasks.find((task) => task.id === String(taskId));
+    if (!existing) return;
+
+    const nextDone = !existing.isDone;
+    setPendingTaskIds((prev) => ({ ...prev, [taskId]: true }));
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === String(taskId) ? { ...task, isDone: nextDone } : task
+      )
+    );
+
+    try {
+      const updated = await updateTask(accessToken, taskId, { is_done: nextDone });
+      if (updated) {
+        const normalized = normalizeTask(updated);
+        setTasks((prev) =>
+          prev.map((task) => (task.id === normalized.id ? normalized : task))
+        );
+      }
+    } catch (error) {
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === String(taskId) ? { ...task, isDone: existing.isDone } : task
+        )
+      );
+      Alert.alert('Ошибка', 'Не удалось обновить задачу.');
+    } finally {
+      setPendingTaskIds((prev) => ({ ...prev, [taskId]: false }));
     }
   };
 
@@ -353,7 +441,9 @@ export default function CalendarScreen({ accessToken }) {
           current={selectedDate}
           markedDates={markedDates}
           markingType="custom"
-          onDayPress={(day) => setSelectedDate(day.dateString)}
+          onDayPress={(day) => {
+            setSelectedDate(day.dateString);
+          }}
           onMonthChange={(month) => {
             setVisibleMonth(new Date(month.year, month.month - 1, 1));
           }}
@@ -387,7 +477,13 @@ export default function CalendarScreen({ accessToken }) {
 
         <View style={styles.cardsBlock}>
           {tasksForDate.map((task) => (
-            <TaskCard key={task.id} task={task} today={today} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              today={today}
+              onToggleDone={() => toggleTaskDone(task.id)}
+              onPress={() => handleOpenEditModal(task)}
+            />
           ))}
 
           <TouchableOpacity
@@ -407,7 +503,13 @@ export default function CalendarScreen({ accessToken }) {
         <View style={styles.cardsBlock}>
           {urgentTasks.length > 0 ? (
             urgentTasks.map((task) => (
-              <TaskCard key={task.id} task={task} today={today} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                today={today}
+                onToggleDone={() => toggleTaskDone(task.id)}
+                onPress={() => handleOpenEditModal(task)}
+              />
             ))
           ) : (
             <View style={styles.emptyCard}>
@@ -428,7 +530,9 @@ export default function CalendarScreen({ accessToken }) {
           onPress={() => setShowModal(false)}
         >
           <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Новая задача</Text>
+            <Text style={styles.modalTitle}>
+              {editingTask ? 'Редактировать задачу' : 'Новая задача'}
+            </Text>
 
             <TextInput
               style={styles.input}
@@ -489,6 +593,16 @@ export default function CalendarScreen({ accessToken }) {
             >
               <Text style={styles.saveButtonText}>Сохранить</Text>
             </TouchableOpacity>
+
+            {editingTask && (
+              <TouchableOpacity
+                style={styles.deleteButton}
+                activeOpacity={0.9}
+                onPress={handleDeleteTask}
+              >
+                <Text style={styles.deleteButtonText}>Удалить</Text>
+              </TouchableOpacity>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -496,7 +610,7 @@ export default function CalendarScreen({ accessToken }) {
   );
 }
 
-function TaskCard({ task, today }) {
+function TaskCard({ task, today, onToggleDone, onPress }) {
   const deadlineDate = parseDateKey(task.deadline);
   const deadlineColor = getDeadlineColor(deadlineDate, today);
 
@@ -507,7 +621,11 @@ function TaskCard({ task, today }) {
   };
 
   return (
-    <View style={styles.taskCard}>
+    <TouchableOpacity
+      style={[styles.taskCard, task.isDone && styles.taskCardDone]}
+      activeOpacity={0.85}
+      onPress={onPress}
+    >
       <View style={styles.taskDateBlock}>
         <Text style={[styles.taskDay, { color: deadlineColor }]}>
           {formatDayNumber(deadlineDate)}
@@ -518,8 +636,12 @@ function TaskCard({ task, today }) {
       </View>
 
       <View style={styles.taskInfoBlock}>
-        <Text style={styles.taskTitle}>{task.title}</Text>
-        <Text style={styles.taskType}>{task.type}</Text>
+        <Text style={[styles.taskTitle, task.isDone && styles.taskTitleDone]}>
+          {task.title}
+        </Text>
+        <Text style={[styles.taskType, task.isDone && styles.taskTypeDone]}>
+          {task.type}
+        </Text>
 
         {!!task.subject && (
           <View style={styles.subjectTag}>
@@ -541,13 +663,15 @@ function TaskCard({ task, today }) {
       </View>
 
       <TouchableOpacity
-        style={styles.arrowCircle}
-        activeOpacity={task.link ? 0.7 : 1}
-        onPress={task.link ? handleLinkPress : undefined}
+        style={[styles.doneCircle, task.isDone && styles.doneCircleDone]}
+        activeOpacity={0.8}
+        onPress={onToggleDone}
       >
-        <Text style={styles.arrowText}>↗</Text>
+        <Text style={[styles.doneText, task.isDone && styles.doneTextDone]}>
+          {task.isDone ? '✓' : '○'}
+        </Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -629,6 +753,9 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 8,
   },
+  taskCardDone: {
+    opacity: 0.7,
+  },
   taskDateBlock: {
     width: 48,
     alignItems: 'center',
@@ -656,10 +783,17 @@ const styles = StyleSheet.create({
     color: '#111111',
     marginBottom: 6,
   },
+  taskTitleDone: {
+    textDecorationLine: 'line-through',
+    color: '#666666',
+  },
   taskType: {
     fontSize: 14,
     color: '#222222',
     marginBottom: 8,
+  },
+  taskTypeDone: {
+    color: '#777777',
   },
   subjectTag: {
     alignSelf: 'flex-start',
@@ -693,20 +827,27 @@ const styles = StyleSheet.create({
     maxWidth: 160,
   },
 
-  arrowCircle: {
+  doneCircle: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#F83603',
+    borderWidth: 2,
+    borderColor: '#F83603',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 12,
   },
-  arrowText: {
-    color: '#FFFFFF',
+  doneCircleDone: {
+    backgroundColor: '#F83603',
+  },
+  doneText: {
+    color: '#F83603',
     fontSize: 14,
     fontWeight: '700',
     marginTop: -1,
+  },
+  doneTextDone: {
+    color: '#FFFFFF',
   },
 
   addTaskCard: {
@@ -790,6 +931,21 @@ const styles = StyleSheet.create({
     fontFamily: 'WixMadeforDisplayBold',
     color: '#FFFFFF',
     fontSize: 17,
+    fontWeight: '700',
+  },
+  deleteButton: {
+    marginTop: 12,
+    height: 52,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#F83603',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    fontFamily: 'WixMadeforDisplayBold',
+    color: '#F83603',
+    fontSize: 16,
     fontWeight: '700',
   },
 });

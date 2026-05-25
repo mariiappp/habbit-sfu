@@ -1,6 +1,15 @@
+import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = 'screen_time_daily_v1';
+
+async function isSecureStoreAvailable() {
+  try {
+    return await SecureStore.isAvailableAsync();
+  } catch (error) {
+    return false;
+  }
+}
 
 function formatDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -11,6 +20,15 @@ function formatDateKey(date = new Date()) {
 
 async function loadStore() {
   try {
+    if (await isSecureStoreAvailable()) {
+      const raw = await SecureStore.getItemAsync(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    }
+  } catch (error) {
+    // Ignore and fallback to AsyncStorage.
+  }
+
+  try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch (error) {
@@ -19,6 +37,15 @@ async function loadStore() {
 }
 
 async function saveStore(store) {
+  try {
+    if (await isSecureStoreAvailable()) {
+      await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(store));
+      return;
+    }
+  } catch (error) {
+    // Ignore and fallback to AsyncStorage.
+  }
+
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   } catch (error) {
